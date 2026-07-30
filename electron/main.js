@@ -350,6 +350,8 @@ async function runAutoUpdateCheck() {
 }
 
 function startAutoUpdateChecks() {
+  // fork — don't pull updates from upstream stacki releases
+  return;
   if (!app.isPackaged) {
     logAutoUpdate('Skipping auto update checks in development');
     return;
