@@ -92,5 +92,8 @@ rewritten destructively.
 ## Credits
 
 Stacki is created by [Timothy Ricks](https://www.timothyricks.com). This fork
-adds the AI layer on top. If you just want the visual editor, use the
+adds AI Mode plus a set of editor upgrades on top: Framer-style canvas
+selection with per-breakpoint targeting, connected AI models with your own
+subscriptions, code prettify, and other quality-of-life boosts. If you just
+want the plain visual editor, use the
 [original](https://github.com/flowtricks/stacki).
