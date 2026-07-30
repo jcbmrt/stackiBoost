@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { SparkleIcon, CheckIcon, TrashIcon } from '../ui/Icons.jsx';
+import { SparkleIcon, CheckIcon, TrashFillIcon } from '../ui/Icons.jsx';
 import { BRAND_ICONS } from '../ui/BrandIcons.jsx';
 import { getAiModels, setAiModels } from '../aiModels.js';
 
@@ -69,7 +69,7 @@ export default function SettingsPanel({ project }) {
                 <span className="settings-provider-actions">
                   {p.available && <CheckIcon size={14} className="settings-check" />}
                   <button className="ghost icon" title="Remove" onClick={() => removeModel(p.id)}>
-                    <TrashIcon size={13} />
+                    <TrashFillIcon size={13} />
                   </button>
                 </span>
               </div>
@@ -92,7 +92,7 @@ export default function SettingsPanel({ project }) {
             onChange={(e) => addModel(e.target.value)}
           >
             <option value="" disabled>
-              + Add model…
+              Add model
             </option>
             {addable.map((p) => (
               <option key={p.id} value={p.id}>

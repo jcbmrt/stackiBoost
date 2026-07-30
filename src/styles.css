@@ -3171,7 +3171,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   -webkit-appearance: none;
   width: 100%;
   background-color: var(--bg-input);
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5' fill='none'><path d='M1 1l3 3 3-3' stroke='%23999999' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10' fill='none'><path d='M5 1v8M1 5h8' stroke='%23999999' stroke-width='1.3' stroke-linecap='round'/></svg>");
   background-repeat: no-repeat;
   background-position: right 10px center;
   border: 1px solid var(--border);
