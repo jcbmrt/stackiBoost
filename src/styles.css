@@ -1832,6 +1832,9 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   position: absolute;
   bottom: 100%;
   left: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--text-dim);
   font-weight: 500;
   white-space: nowrap;
