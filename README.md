@@ -1,10 +1,24 @@
-# Stacki
+<p align="center">
+  <img src=".github/hero.jpg" alt="StackiBoost — Visual Builder for Astro with built-in AI" width="100%" />
+</p>
 
-Visual Builder for Astro.
+# StackiBoost
 
-A Mac & Windows desktop app for editing [Astro](https://astro.build) projects visually.
+Visual Builder for Astro — boosted with AI.
 
-MIT licensed — fork it, build on it, ship your own version.
+A fork of [Stacki](https://github.com/flowtricks/stacki) by Timothy Ricks that adds a built-in AI assistant powered by [Claude Code](https://claude.com/claude-code). Edit your Astro site visually, and when you want something bigger — a new section, a whole page, a restyle — just ask.
+
+MIT licensed, like the original.
+
+## The AI panel
+
+- **✦ AI on the left rail** (or `⌘J`) opens a floating chat over the canvas. `Esc` closes it.
+- **It knows what you're looking at.** The open page and the element you have selected on the canvas (breadcrumb, props, text) are sent along with every prompt — "make this heading bigger" just works.
+- **Your own subscriptions, no API keys.** Prompts run through whichever coding CLI you have installed and logged into — [Claude Code](https://claude.com/claude-code) (claude.ai Pro/Max), [Codex CLI](https://developers.openai.com/codex/cli) (ChatGPT), or [Gemini CLI](https://github.com/google-gemini/gemini-cli) (Google). Switch models from the dropdown in the chat.
+- **Edits show up live.** The AI edits the project files directly; Astro's hot reload and Stacki's file watcher update the canvas while it works.
+- **Connected models** (gear on the left rail) shows which CLIs are installed and logged in, with one-click connection tests and install links.
+
+To use it, install at least one of the CLIs above, log in once from a terminal, and you're set.
 
 ## Features
 
@@ -34,8 +48,8 @@ npm start
 
 ## Packaging installers
 
-If you're building for yourself or from a fork, use the unsigned build — it
-needs no Apple Developer account and no certificates:
+Use the unsigned build — it needs no Apple Developer account and no
+certificates:
 
 ```bash
 npm run dist:mac:unsigned   # .dmg + .zip, no signing (build on macOS)
@@ -45,45 +59,23 @@ npm run dist:win            # NSIS installer (build on Windows)
 Output lands in `release/`. macOS will warn the first time you open an
 unsigned build; right-click the app and choose Open to get past Gatekeeper.
 
-The signed variants are for maintainers with the release certificates:
+For a quick local install on macOS without a dmg:
 
 ```bash
-npm run dist:mac   # requires a Developer ID cert + notarization credentials
+npm run build
+npx electron-builder --mac dir -c.mac.forceCodeSigning=false -c.mac.notarize=false -c.mac.identity=null
+cp -R release/mac-arm64/StackiBoost.app /Applications/
 ```
 
-## Releases
-
-Official builds are published by CI, not from anyone's laptop. Pushing a
-`v*` tag runs `.github/workflows/release.yml`, which builds a signed and
-notarized macOS universal build plus a Windows installer, uploads them to
-the `stacki-releases` repo, and only makes the release visible once both
-platforms have landed. Shipped apps auto-update from that feed via
-`electron-updater`.
-
-Signing and notarization credentials live in GitHub Actions secrets. They
-are never in this repository, and GitHub does not expose them to workflows
-triggered from forks — so a fork can build and run everything here, but
-cannot produce a build signed with the official identity. That's intended.
-
-If you fork this and publish your own builds, change `build.appId` and
-`build.publish` in `package.json` to your own identifiers so your releases
-don't collide with the official update feed.
-
-## Contributing
-
-Issues and pull requests are welcome. A few notes:
-
-- `npm run dev` is all you need for day-to-day work — no credentials required.
-- Please don't add workflows that use `pull_request_target`, or any workflow
-  that exposes secrets to code from a fork.
-- Report security issues privately to the maintainer rather than opening a
-  public issue.
+Note: unlike upstream Stacki, this fork does not auto-update — the updater
+is disabled so your build never gets replaced by an upstream release.
 
 ## Requirements
 
 - Node.js 18+ and npm (the app shells out to `npm install` / `astro dev` for opened projects)
 - `git` for version control features
 - [GitHub CLI](https://cli.github.com) (`gh`), authenticated via `gh auth login`, for "Publish to GitHub"
+- For the AI panel (optional — everything else works without it): [Claude Code](https://claude.com/claude-code), [Codex CLI](https://developers.openai.com/codex/cli), or [Gemini CLI](https://github.com/google-gemini/gemini-cli), logged in
 
 ## How editing works
 
@@ -92,3 +84,9 @@ self-closing component instances with props. The editor writes that model back
 as clean `.astro` source. Pages containing arbitrary HTML, expressions, or
 nested children fall back to the built-in code editor — nothing is ever
 rewritten destructively.
+
+## Credits
+
+Stacki is created by [Timothy Ricks](https://www.timothyricks.com). This fork
+adds the AI layer on top — if you just want the visual editor, use the
+[original](https://github.com/flowtricks/stacki).
