@@ -3159,3 +3159,28 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 }
 .settings-pick-row:hover { border-color: var(--border-strong); }
 .ai-drawer.compact .ai-composer { margin-top: 10px; }
+
+/* settings model cards v2 */
+.settings-label { display: inline-flex; align-items: center; gap: 8px; }
+.settings-provider-actions { display: inline-flex; align-items: center; gap: 6px; }
+.settings-check { color: var(--component-green); }
+.settings-provider .ghost.icon { padding: 4px; background: transparent; color: var(--text-faint); }
+.settings-provider .ghost.icon:hover { color: var(--red); background: var(--bg-hover); }
+.settings-add {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  background-color: var(--bg-input);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5' fill='none'><path d='M1 1l3 3 3-3' stroke='%23999999' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 12px;
+  padding: 8px 36px 8px 10px;
+  outline: none;
+  cursor: pointer;
+}
+.settings-add:hover { border-color: var(--border-strong); color: var(--text); }
