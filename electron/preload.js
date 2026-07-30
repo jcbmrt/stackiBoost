@@ -8,6 +8,28 @@ if (!process.isMainFrame) {
   // They get an editor cursor (no I-beam over text) and links/forms are
   // inert — navigation only happens in the interactive preview mode.
   if (location.hash.includes('avb-design')) {
+    // canvas frames show the full page, so wheel means pan/zoom the canvas,
+    // not scroll the page: forward it to the parent
+    if (location.hash.includes('avb-canvas')) {
+      window.addEventListener(
+        'wheel',
+        (e) => {
+          e.preventDefault();
+          window.parent.postMessage(
+            {
+              type: 'avb:wheel',
+              dx: e.deltaX,
+              dy: e.deltaY,
+              ctrl: e.ctrlKey || e.metaKey,
+              x: e.clientX,
+              y: e.clientY,
+            },
+            '*'
+          );
+        },
+        { passive: false }
+      );
+    }
     const injectDesignStyle = () => {
       if (document.getElementById('avb-design-style')) return;
       const style = document.createElement('style');

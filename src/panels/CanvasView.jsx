@@ -70,6 +70,25 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
         setHovers((h) => (h[key] === d.path ? h : { ...h, [key]: d.path }));
       } else if (d.type === 'avb:rects') {
         setRects((r) => ({ ...r, [key]: d.rects || {} }));
+      } else if (d.type === 'avb:wheel') {
+        const el = iframeRefs.current[key];
+        const wrap = wrapRef.current;
+        const v = viewRef.current;
+        if (!el || !wrap || !v) return;
+        userMovedRef.current = true;
+        const wrect = wrap.getBoundingClientRect();
+        const irect = el.getBoundingClientRect();
+        const cx = irect.left - wrect.left + d.x * v.s;
+        const cy = irect.top - wrect.top + d.y * v.s;
+        setView((vv) => {
+          if (!vv) return vv;
+          if (d.ctrl) {
+            const ns = clamp(vv.s * Math.exp(-d.dy * 0.01), MIN_ZOOM, MAX_ZOOM);
+            const k = ns / vv.s;
+            return { s: ns, x: cx - (cx - vv.x) * k, y: cy - (cy - vv.y) * k };
+          }
+          return { ...vv, x: vv.x - d.dx, y: vv.y - d.dy };
+        });
       }
     };
     window.addEventListener('message', onMessage);
@@ -223,7 +242,7 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
               <iframe
                 key={`${url}-${refreshKey}`}
                 ref={(el) => (iframeRefs.current[f.key] = el)}
-                src={`${url}#avb-design`}
+                src={`${url}#avb-design,avb-canvas`}
                 title={`${f.label} preview`}
                 onLoad={(e) => {
                   e.currentTarget.contentWindow?.postMessage(
