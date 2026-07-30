@@ -176,13 +176,14 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const current = providers?.find((p) => p.id === provider);
   const noneAvailable = providers && !providers.some((p) => p.available);
   const unavailable = providers && (!current || !current.available);
+  const compact = messages.length === 0 && !live && !running;
 
   return (
-    <div className="ai-drawer" style={{ height }}>
-      <div className="ai-resize" onPointerDown={onDragStart} />
+    <div className={`ai-drawer ${compact ? 'compact' : ''}`} style={compact ? undefined : { height }}>
+      {!compact && <div className="ai-resize" onPointerDown={onDragStart} />}
       <div className="ai-head">
         <span className="ai-title">
-          <SparkleIcon size={13} /> AI
+          <SparkleIcon size={13} /> AI Mode <span className="ai-sub">— Ask for anything</span>
         </span>
         <span className="spacer" />
         <button className="ghost" title="New chat" onClick={newChat}>
@@ -193,31 +194,21 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         </button>
       </div>
 
+      {compact && noneAvailable && (
+        <div className="ai-note">
+          No AI provider found — install{' '}
+          <a onClick={() => window.avb.openExternal('https://claude.com/claude-code')}>Claude Code</a>,{' '}
+          <a onClick={() => window.avb.openExternal('https://developers.openai.com/codex/cli')}>Codex CLI</a> or{' '}
+          <a onClick={() => window.avb.openExternal('https://github.com/google-gemini/gemini-cli')}>Gemini CLI</a>, log
+          in, then check Settings.
+        </div>
+      )}
+      {compact && unavailable && !noneAvailable && current && (
+        <div className="ai-note">{current.name} isn't installed. {current.loginHint}</div>
+      )}
+
+      {!compact && (
       <div className="ai-scroll" ref={scrollRef}>
-        {noneAvailable && (
-          <div className="ai-empty">
-            <p>No AI provider found. Install one and log in, then check Settings → Connected models:</p>
-            <p>
-              <a onClick={() => window.avb.openExternal('https://claude.com/claude-code')}>Claude Code</a>
-              {' · '}
-              <a onClick={() => window.avb.openExternal('https://developers.openai.com/codex/cli')}>Codex CLI</a>
-              {' · '}
-              <a onClick={() => window.avb.openExternal('https://github.com/google-gemini/gemini-cli')}>Gemini CLI</a>
-            </p>
-          </div>
-        )}
-        {unavailable && !noneAvailable && current && (
-          <div className="ai-empty">
-            <p>{current.name} isn't installed.</p>
-            <p className="dim">{current.loginHint}</p>
-          </div>
-        )}
-        {!unavailable && messages.length === 0 && !live && (
-          <div className="ai-empty">
-            <p>Ask for anything — new sections, style changes, whole pages.</p>
-            <p className="dim">Whatever you have selected on the canvas is sent along as context, and edits show up live.</p>
-          </div>
-        )}
         {messages.map((m, i) =>
           m.role === 'user' ? (
             <div key={i} className="ai-msg user">{m.text}</div>
@@ -245,6 +236,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         )}
         {running && !live && <div className="ai-thinking">Thinking…</div>}
       </div>
+      )}
 
       <div className="ai-composer" onClick={() => inputRef.current?.focus()}>
         <textarea

@@ -2928,6 +2928,15 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   color: var(--text);
 }
 .ai-title svg { color: var(--accent); }
+.ai-sub { color: var(--text-dim); font-weight: 400; }
+.ai-drawer.compact { height: auto; }
+.ai-note {
+  padding: 10px 14px 0;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.ai-note a { color: var(--accent); cursor: pointer; }
 .ai-head .spacer { flex: 1; }
 .ai-head .ghost { padding: 4px; background: transparent; }
 .ai-head .ghost:hover { background: var(--bg-hover); }
@@ -3009,15 +3018,18 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 .ai-composer:focus-within { border-color: var(--border-strong); }
 .ai-input {
   resize: none;
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
   background: transparent;
   border: none;
   color: var(--text);
   font-family: var(--font);
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.5;
-  padding: 10px 12px 4px;
-  min-height: 32px;
-  max-height: 120px;
+  padding: 12px 12px 8px;
+  min-height: 52px;
+  max-height: 140px;
   outline: none;
 }
 .ai-composer-bar {
@@ -3116,3 +3128,4 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   max-width: 130px;
 }
 .ai-model:hover { color: var(--text); }
+.ai-drawer.compact .ai-composer { margin-top: 10px; }
