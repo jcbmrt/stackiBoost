@@ -35,6 +35,7 @@ export default function StructurePanel({
   onSelect,
   onHoverNode,
   onOpenComponent,
+  onOpenCode,
   onChangeLayout,
   onDropComponent,
   onMoveNode,
@@ -262,6 +263,7 @@ export default function StructurePanel({
           className={`structure-node frontmatter-node ${selectedId === 'frontmatter' ? 'selected' : ''}`}
           style={{ paddingLeft: 6 }}
           onClick={() => onSelect('frontmatter')}
+          onDoubleClick={() => onOpenCode && onOpenCode('frontmatter')}
         >
           <span className="drag-handle" style={{ visibility: 'hidden' }}>
             <DragIcon size={11} />
@@ -284,6 +286,7 @@ export default function StructurePanel({
           onChangeLayout={onChangeLayout}
           onHoverNode={onHoverNode}
           onOpenComponent={onOpenComponent}
+          onOpenCode={onOpenCode}
           isCollapsed={isCollapsed}
           dropTarget={dropTarget}
           setDropTarget={setDropTarget}
@@ -457,6 +460,7 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
     onSelect,
     onHoverNode,
     onOpenComponent,
+    onOpenCode,
     toggleCollapse,
     openContextMenu,
   } = ctx;
@@ -526,6 +530,12 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
           onSelect(node.id);
         }}
         onDoubleClick={(e) => {
+          // Code-bearing nodes open the floating editor, like Edit code does.
+          if (node.kind === 'raw' && onOpenCode) {
+            e.stopPropagation();
+            onOpenCode(node.id);
+            return;
+          }
           // Drill into a component's own file, the way Webflow opens one.
           if (node.kind !== 'component' || node.dynamicTag || !onOpenComponent) return;
           e.stopPropagation();

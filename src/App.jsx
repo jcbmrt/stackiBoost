@@ -1978,6 +1978,22 @@ export default function App() {
   // Read by the keydown effect, which is set up long before this exists.
   openCodeWindowRef.current = openCodeWindow;
 
+  // Same thing from a navigator double-click, without relying on selection.
+  const openCodeForNode = (nodeId) => {
+    if (nodeId === 'frontmatter') {
+      setCodeWin({ targetId: 'frontmatter', title: 'Frontmatter', language: 'javascript' });
+      return;
+    }
+    const n = model && findNodeById(model.nodes, nodeId);
+    if (n?.kind === 'raw') {
+      setCodeWin({
+        targetId: n.id,
+        title: `<${n.name}>`,
+        language: n.name === 'style' ? 'css' : 'javascript',
+      });
+    }
+  };
+
   // Opens a public/ text file in the floating editor.
   const openAssetFile = useCallback(
     async ({ rel, name }) => {
@@ -2261,6 +2277,7 @@ export default function App() {
                 onSelect={setSelectedId}
                 onHoverNode={setHoverNodeId}
                 onOpenComponent={(name, id) => openComponent(name, pathFor(id))}
+                onOpenCode={openCodeForNode}
                 onChangeLayout={changeLayout}
                 onDropComponent={addComponent}
                 onMoveNode={moveNode}
