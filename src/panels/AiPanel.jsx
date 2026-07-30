@@ -19,6 +19,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const [added, setAdded] = useState(() => getAiModels() || []);
   const [provider, setProvider] = useState(() => localStorage.getItem('ai-provider') || 'claude');
   const [height, setHeight] = useState(300);
+  const [pinned, setPinned] = useState(false); // user sized the panel by hand
   const [autoH, setAutoH] = useState(52); // grows with content up to ~5 lines
   const [inputH, setInputH] = useState(null); // manual override from the grip
   const sessionsRef = useRef({});
@@ -173,6 +174,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     setMessages([]);
     setLiveText(() => '');
     setRunning(false);
+    setPinned(false);
     inputRef.current?.focus();
   }, [running]);
 
@@ -225,6 +227,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     const maxH = (drawer?.parentElement?.clientHeight || window.innerHeight) - 28;
     const startY = e.clientY;
     const startH = drawer?.getBoundingClientRect().height || height;
+    setPinned(true);
     dragWith(e, (ev) => {
       setHeight(Math.min(Math.max(startH + (startY - ev.clientY), 160), maxH));
     });
@@ -234,14 +237,14 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const current = addedProviders.find((p) => p.id === provider);
   const noneAdded = providers && addedProviders.length === 0;
   const unavailable = providers && (!current || !current.available);
-  const compact = messages.length === 0 && !live && !running;
+  const compact = !pinned && messages.length === 0 && !live && !running;
 
   return (
     <div
       className={`ai-drawer ${compact ? 'compact' : ''}`}
       style={compact ? undefined : { height: Math.max(height, effInputH + 170) }}
     >
-      {!compact && <div className="ai-resize" onPointerDown={onDragStart} />}
+      <div className="ai-resize" onPointerDown={onDragStart} />
       <div className="ai-head">
         <span className="ai-title">
           <SparkleIcon size={13} /> AI Mode <span className="ai-sub">- Ask for anything</span>

@@ -2909,10 +2909,24 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   top: 0;
   left: 0;
   right: 0;
-  height: 6px;
+  height: 12px;
   cursor: ns-resize;
   z-index: 2;
 }
+.ai-resize::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.ai-resize:hover::after { opacity: 1; }
 .ai-head {
   display: flex;
   align-items: center;
