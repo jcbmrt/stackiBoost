@@ -3028,9 +3028,16 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   font-size: 13px;
   line-height: 1.5;
   padding: 12px 12px 8px;
-  min-height: 52px;
-  max-height: 140px;
+  overflow-y: auto;
   outline: none;
+}
+.ai-input-grip {
+  height: 6px;
+  margin-bottom: -6px;
+  cursor: ns-resize;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
 }
 .ai-composer-bar {
   display: flex;

@@ -17,6 +17,8 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const [providers, setProviders] = useState(null);
   const [provider, setProvider] = useState(() => localStorage.getItem('ai-provider') || 'claude');
   const [height, setHeight] = useState(300);
+  const [autoH, setAutoH] = useState(52); // grows with content up to ~5 lines
+  const [inputH, setInputH] = useState(null); // manual override from the grip
   const sessionsRef = useRef({});
   const providerRef = useRef(provider);
   providerRef.current = provider;
@@ -156,6 +158,37 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     inputRef.current?.focus();
   }, [running]);
 
+  // auto-grow the input with its content
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const prev = el.style.height;
+    el.style.height = 'auto';
+    const sh = el.scrollHeight;
+    el.style.height = prev;
+    setAutoH(Math.min(Math.max(sh + 2, 52), 122));
+  }, [input]);
+
+  const effInputH = inputH ?? autoH;
+
+  // drag the grip to set the input height by hand; double-click resets
+  const onInputGrip = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const startH = effInputH;
+    const move = (ev) => {
+      const h = Math.min(Math.max(startH + (startY - ev.clientY), 52), window.innerHeight * 0.7);
+      setInputH(h);
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  };
+
   // drag to resize
   const onDragStart = (e) => {
     e.preventDefault();
@@ -179,7 +212,10 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const compact = messages.length === 0 && !live && !running;
 
   return (
-    <div className={`ai-drawer ${compact ? 'compact' : ''}`} style={compact ? undefined : { height }}>
+    <div
+      className={`ai-drawer ${compact ? 'compact' : ''}`}
+      style={compact ? undefined : { height: Math.max(height, effInputH + 170) }}
+    >
       {!compact && <div className="ai-resize" onPointerDown={onDragStart} />}
       <div className="ai-head">
         <span className="ai-title">
@@ -239,9 +275,16 @@ export default function AiPanel({ project, context, onClose, showToast }) {
       )}
 
       <div className="ai-composer" onClick={() => inputRef.current?.focus()}>
+        <div
+          className="ai-input-grip"
+          title="Drag to resize, double-click to reset"
+          onPointerDown={onInputGrip}
+          onDoubleClick={() => setInputH(null)}
+        />
         <textarea
           ref={inputRef}
           className="ai-input"
+          style={{ height: effInputH }}
           placeholder={running ? 'Working…' : 'Describe a change…'}
           value={input}
           rows={1}
