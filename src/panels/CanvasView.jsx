@@ -22,12 +22,59 @@ const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-export default function CanvasView({ url, refreshKey }) {
+export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onOpenPath, activeKey, onActivate }) {
   const wrapRef = React.useRef(null);
   const iframeRefs = React.useRef({}); // key -> iframe element
   const [view, setView] = React.useState(null); // {x, y, s}
   const [panning, setPanning] = React.useState(false);
   const [heights, setHeights] = React.useState({}); // key -> page height
+  const [rects, setRects] = React.useState({}); // key -> {path: rect}
+  const [hovers, setHovers] = React.useState({}); // key -> path
+  const hoversRef = React.useRef({});
+  hoversRef.current = hovers;
+  const selPathRef = React.useRef(selPath);
+  selPathRef.current = selPath;
+
+  const frameKeyFor = (source) => {
+    const entry = Object.entries(iframeRefs.current).find(
+      ([, el]) => el && el.contentWindow === source
+    );
+    return entry ? entry[0] : null;
+  };
+
+  // tell a frame which paths to report rects for
+  const track = (key) => {
+    const el = iframeRefs.current[key];
+    const paths = [selPathRef.current, hoversRef.current[key]].filter(Boolean);
+    el?.contentWindow?.postMessage({ type: 'avb:track', paths }, '*');
+  };
+
+  React.useEffect(() => {
+    for (const key of Object.keys(iframeRefs.current)) track(key);
+  }, [selPath, hovers]);
+
+  // clicks, hovers and rects coming back from the frames
+  React.useEffect(() => {
+    const onMessage = (e) => {
+      const d = e.data;
+      if (!d?.type) return;
+      const key = frameKeyFor(e.source);
+      if (!key) return;
+      if (d.type === 'avb:click-node') {
+        onActivate && onActivate(key);
+        onSelectPath && onSelectPath(d.path || null);
+      } else if (d.type === 'avb:open-node' && d.path) {
+        onActivate && onActivate(key);
+        onOpenPath && onOpenPath(d.path);
+      } else if (d.type === 'avb:hover-node') {
+        setHovers((h) => (h[key] === d.path ? h : { ...h, [key]: d.path }));
+      } else if (d.type === 'avb:rects') {
+        setRects((r) => ({ ...r, [key]: d.rects || {} }));
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [onActivate, onSelectPath, onOpenPath]);
   const viewRef = React.useRef(null);
   viewRef.current = view;
 
@@ -168,7 +215,7 @@ export default function CanvasView({ url, refreshKey }) {
             >
               {/* Counter-scaled so labels stay a constant size on screen. */}
               <div
-                className="canvas-frame-label"
+                className={`canvas-frame-label ${activeKey === f.key ? 'active' : ''}`}
                 style={{ fontSize: 13 / view.s, paddingBottom: 8 / view.s }}
               >
                 {f.label} · {f.width}px
@@ -178,14 +225,36 @@ export default function CanvasView({ url, refreshKey }) {
                 ref={(el) => (iframeRefs.current[f.key] = el)}
                 src={`${url}#avb-design`}
                 title={`${f.label} preview`}
-                onLoad={(e) =>
+                onLoad={(e) => {
                   e.currentTarget.contentWindow?.postMessage(
                     { type: 'avb:set-vh', px: f.viewportHeight },
                     '*'
-                  )
-                }
+                  );
+                  track(f.key);
+                }}
               />
-              <div className="canvas-frame-cover" />
+              {[
+                hovers[f.key] && hovers[f.key] !== selPath
+                  ? { path: hovers[f.key], cls: 'hover' }
+                  : null,
+                selPath ? { path: selPath, cls: 'sel' } : null,
+              ]
+                .filter(Boolean)
+                .flatMap(({ path, cls }) =>
+                  (rects[f.key]?.[path] || []).map((r, i) => (
+                    <div
+                      key={`${cls}-${i}`}
+                      className={`canvas-outline ${cls}`}
+                      style={{
+                        left: r.x,
+                        top: r.y,
+                        width: r.w,
+                        height: r.h,
+                        borderWidth: Math.max(1.5 / view.s, 1),
+                      }}
+                    />
+                  ))
+                )}
             </div>
           ))}
         </div>

@@ -66,6 +66,8 @@ export default function PreviewPane({
   focusPath,
   device,
   onDevice,
+  canvasBp,
+  onCanvasBp,
 }) {
   // The breakpoint lives in App so a re-mount of this pane can't silently
   // kick the user out of a view (which would reload every preview iframe).
@@ -332,7 +334,15 @@ export default function PreviewPane({
 
       <div className="preview-frame-wrap" ref={wrapRef}>
         {url && device === 'canvas' ? (
-          <CanvasView url={url} refreshKey={refreshKey} />
+          <CanvasView
+            url={url}
+            refreshKey={refreshKey}
+            selPath={selPath}
+            onSelectPath={onSelectPath}
+            onOpenPath={onOpenPath}
+            activeKey={canvasBp}
+            onActivate={onCanvasBp}
+          />
         ) : url ? (
           <div
             ref={frameRef}

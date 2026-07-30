@@ -1094,7 +1094,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   display: flex;
   gap: 2px;
   flex-shrink: 0;
-  padding: 8px 10px 4px;
+  padding: 8px 10px;
   border-bottom: 1px solid var(--border);
 }
 .right-tabs button {
@@ -1114,7 +1114,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 .right-tabs-indicator {
   position: absolute;
   top: 8px;
-  bottom: 4px;
+  bottom: 8px;
   border-radius: 6px;
   background: var(--bg-active);
   transition:
@@ -1819,7 +1819,15 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   border: none;
   border-radius: inherit;
 }
-.canvas-frame-cover { position: absolute; inset: 0; }
+.canvas-outline {
+  position: absolute;
+  pointer-events: none;
+  border-style: solid;
+  border-color: var(--accent);
+  z-index: 2;
+}
+.canvas-outline.hover { border-color: rgba(0, 153, 255, 0.45); }
+.canvas-frame-label.active { color: var(--accent); }
 .canvas-frame-label {
   position: absolute;
   bottom: 100%;

@@ -365,6 +365,8 @@ export default function App() {
   // not silently drop the user out of the view they picked (which would
   // reload every preview iframe and flash the canvas white).
   const [device, setDevice] = useState('desktop');
+  // which frame was last clicked in canvas mode, so styles + ai target it
+  const [canvasBp, setCanvasBp] = useState('desktop');
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -2044,6 +2046,9 @@ export default function App() {
     crumbs.push(...chain.map((n) => ({ id: n.id, label: crumbLabel(n) })));
   }
 
+  // the breakpoint being edited: canvas clicks pick their frame's breakpoint
+  const effDevice = device === 'canvas' ? canvasBp : device;
+
   // what the ai panel sends along with each prompt
   let aiContext = null;
   if (project) {
@@ -2060,6 +2065,11 @@ export default function App() {
       );
     }
     if (crumbs.length > 1) lines.push(`Breadcrumb: ${crumbs.map((c) => c.label).join(' > ')}`);
+    const bpLabel =
+      { desktop: 'Desktop (1440px, base styles)', tablet: 'Tablet (max-width 768px)', phone: 'Phone (max-width 375px)' }[
+        effDevice
+      ] || effDevice;
+    lines.push(`Active breakpoint: ${bpLabel}${device === 'canvas' ? ' (canvas view, all breakpoints visible)' : ''}`);
     if (selectedId === 'frontmatter') {
       lines.push('Selected: the page frontmatter');
     } else if (selectedNode) {
@@ -2344,6 +2354,8 @@ export default function App() {
             focusPath={focusPath}
             device={device}
             onDevice={setDevice}
+            canvasBp={canvasBp}
+            onCanvasBp={setCanvasBp}
             onSelectPath={(p) => {
               // Editing a component: the canvas still shows the whole page, so
               // a click in the dimmed area (or on nothing) means "I'm done in
@@ -2441,7 +2453,7 @@ export default function App() {
                 project={project}
                 model={model}
                 node={selectedNode}
-                device={device}
+                device={effDevice}
                 onWriteStyleNode={(nodeId, css, immediate) =>
                   setNodeText(nodeId, css, undefined, immediate)
                 }
