@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import CodeEditor from './CodeEditor.jsx';
 import { CloseIcon, CodeIcon } from './Icons.jsx';
+import * as prettier from 'prettier/standalone';
+import * as pluginBabel from 'prettier/plugins/babel';
+import * as pluginEstree from 'prettier/plugins/estree';
+import * as pluginPostcss from 'prettier/plugins/postcss';
 
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 const MIN_W = 340;
@@ -9,12 +13,33 @@ const MIN_H = 220;
 // Floating, draggable, resizable code editor window. Non-modal: the rest of
 // the app stays interactive while it's open.
 export default function CodeWindow({ title, language, value, onChange, onClose, editorKey }) {
-  const [rect, setRect] = useState(() => ({
-    x: Math.max(60, window.innerWidth - 660),
-    y: 96,
-    w: 580,
-    h: Math.min(460, window.innerHeight - 160),
-  }));
+  const [rect, setRect] = useState(() => {
+    const w = Math.min(640, window.innerWidth - 120);
+    const h = Math.min(520, window.innerHeight - 160);
+    return {
+      x: Math.max(60, (window.innerWidth - w) / 2),
+      y: Math.max(48, (window.innerHeight - h) / 2),
+      w,
+      h,
+    };
+  });
+  const [fmtState, setFmtState] = useState(null); // null | 'busy' | 'error'
+
+  const prettify = async () => {
+    if (fmtState === 'busy') return;
+    setFmtState('busy');
+    try {
+      const formatted = await prettier.format(value, {
+        parser: language === 'css' ? 'css' : 'babel-ts',
+        plugins: [pluginBabel, pluginEstree, pluginPostcss],
+      });
+      onChange(formatted.replace(/\n$/, ''));
+      setFmtState(null);
+    } catch {
+      setFmtState('error');
+      setTimeout(() => setFmtState(null), 1800);
+    }
+  };
 
   const startDrag = (e) => {
     if (e.target.closest('button')) return;
@@ -85,6 +110,13 @@ export default function CodeWindow({ title, language, value, onChange, onClose, 
       </div>
       <div className="code-window-body">
         <CodeEditor key={editorKey} language={language} value={value} onChange={onChange} />
+      </div>
+      <div className="code-window-footer">
+        <button className="ghost" onClick={prettify} disabled={fmtState === 'busy'}>
+          {fmtState === 'error' ? "Can't format" : fmtState === 'busy' ? 'Formatting…' : 'Prettify'}
+        </button>
+        <span style={{ flex: 1 }} />
+        <span className="dim">Saved live</span>
       </div>
       <div className="cw-rz cw-rz-n" onPointerDown={startResize('n')} />
       <div className="cw-rz cw-rz-s" onPointerDown={startResize('s')} />

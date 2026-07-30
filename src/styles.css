@@ -3210,3 +3210,13 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   cursor: pointer;
 }
 .settings-add:hover { border-color: var(--border-strong); color: var(--text); }
+
+.code-window-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.code-window-footer .dim { color: var(--text-faint); font-size: 11px; }
