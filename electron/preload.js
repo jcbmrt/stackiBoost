@@ -588,6 +588,17 @@ contextBridge.exposeInMainWorld('avb', {
 
   openExternal: invoke('shell:openExternal'),
 
+  // AI panel (Claude Code)
+  aiStatus: invoke('ai:status'),
+  aiTest: invoke('ai:test'),
+  aiSend: invoke('ai:send'),
+  aiStop: invoke('ai:stop'),
+  onAiEvent: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('ai:event', listener);
+    return () => ipcRenderer.removeListener('ai:event', listener);
+  },
+
   // Events
   onDevLog: (cb) => {
     const listener = (_e, data) => cb(data);

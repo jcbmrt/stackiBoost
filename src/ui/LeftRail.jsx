@@ -5,6 +5,8 @@ import {
   ComponentFillIcon,
   AssetManagerIcon,
   CmsIcon,
+  SparkleIcon,
+  GearIcon,
 } from './Icons.jsx';
 
 const TABS = [
@@ -15,11 +17,16 @@ const TABS = [
   { id: 'cms', title: 'CMS', shortcut: '⌥C', Icon: CmsIcon },
 ];
 
+const BOTTOM = [
+  { id: 'ai', title: 'AI', shortcut: '⌘J', Icon: SparkleIcon },
+  { id: 'settings', title: 'Settings', shortcut: '', Icon: GearIcon },
+];
+
 const TOOLTIP_DELAY = 500;
 
 // Webflow-style icon rail. Clicking the active tab collapses the panel.
 // Hovering a button for a moment shows a tooltip with its keyboard shortcut.
-export default function LeftRail({ active, onSelect }) {
+export default function LeftRail({ active, onSelect, aiOpen, onToggleAi }) {
   const [tip, setTip] = useState(null); // {id, left, top}
   const timerRef = useRef(null);
 
@@ -73,27 +80,33 @@ export default function LeftRail({ active, onSelect }) {
     return () => window.removeEventListener('keydown', onKey);
   }, [onSelect]);
 
-  const tipTab = tip && TABS.find((t) => t.id === tip.id);
+  const tipTab = tip && [...TABS, ...BOTTOM].find((t) => t.id === tip.id);
+
+  const railBtn = ({ id, Icon }, isOn, onClick) => (
+    <button
+      key={id}
+      className={`rail-btn ${isOn ? 'on' : ''} ${id === 'ai' ? 'rail-ai' : ''}`}
+      onMouseEnter={showSoon(id)}
+      onMouseLeave={hide}
+      onClick={() => {
+        hide();
+        onClick();
+      }}
+    >
+      <Icon size={20} />
+    </button>
+  );
 
   return (
     <div className="rail">
-      {TABS.map(({ id, Icon }) => (
-        <button
-          key={id}
-          className={`rail-btn ${active === id ? 'on' : ''}`}
-          onMouseEnter={showSoon(id)}
-          onMouseLeave={hide}
-          onClick={() => {
-            hide();
-            onSelect(id);
-          }}
-        >
-          <Icon size={20} />
-        </button>
-      ))}
+      {TABS.map((t) => railBtn(t, active === t.id, () => onSelect(t.id)))}
+      <span className="rail-spacer" />
+      {railBtn(BOTTOM[0], aiOpen, onToggleAi)}
+      {railBtn(BOTTOM[1], active === 'settings', () => onSelect('settings'))}
       {tipTab && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
-          {tipTab.title} ({tipTab.shortcut})
+          {tipTab.title}
+          {tipTab.shortcut ? ` (${tipTab.shortcut})` : ''}
         </div>
       )}
     </div>

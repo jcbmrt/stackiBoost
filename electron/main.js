@@ -27,6 +27,7 @@ const {
   parseSlots,
 } = require('./astroParser');
 const { scaffoldProject } = require('./scaffold');
+const { registerClaudeAgent } = require('./claudeAgent');
 const { importersOf } = require('./cmsRefs');
 const { autoUpdater } = require('electron-updater');
 
@@ -2488,3 +2489,6 @@ ipcMain.handle('shell:openExternal', async (_e, url) => {
   if (/^https?:\/\//.test(url)) shell.openExternal(url);
   return { ok: true };
 });
+
+// ai panel
+registerClaudeAgent({ ipcMain, send, ensureToolPath });

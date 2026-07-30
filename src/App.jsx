@@ -14,6 +14,8 @@ import InsertSearch from './ui/InsertSearch.jsx';
 import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
+import AiPanel from './panels/AiPanel.jsx';
+import SettingsPanel from './panels/SettingsPanel.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
 import { isDataBound } from './bindings.js';
@@ -377,6 +379,7 @@ export default function App() {
   // opening a window over the canvas.
   const [assetPick, setAssetPick] = useState(null);
   const tabBeforePick = useRef(null);
+  const [aiOpen, setAiOpen] = useState(false);
 
   // A layout is just a component that lives in src/layouts — it can be
   // placed on a page like any other. Every lookup that answers "what do we
@@ -1243,6 +1246,13 @@ export default function App() {
         return;
       }
 
+      // ⌘J toggles the ai panel
+      if (mod && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        setAiOpen((v) => !v);
+        return;
+      }
+
       const t = e.target;
       if (
         t instanceof HTMLElement &&
@@ -2018,6 +2028,52 @@ export default function App() {
     crumbs.push(...chain.map((n) => ({ id: n.id, label: crumbLabel(n) })));
   }
 
+  // what the ai panel sends along with each prompt
+  let aiContext = null;
+  if (project) {
+    const relPath =
+      currentPage && currentPage.path.startsWith(project.path)
+        ? currentPage.path.slice(project.path.length).replace(/^\//, '')
+        : currentPage?.path || null;
+    const lines = [`Project root: ${project.path}`];
+    if (relPath) {
+      lines.push(
+        `Open file: ${relPath}` +
+          (currentPage.route ? ` (route ${currentPage.route})` : '') +
+          (currentPage.kind === 'component' ? ' (editing this component)' : '')
+      );
+    }
+    if (crumbs.length > 1) lines.push(`Breadcrumb: ${crumbs.map((c) => c.label).join(' > ')}`);
+    if (selectedId === 'frontmatter') {
+      lines.push('Selected: the page frontmatter');
+    } else if (selectedNode) {
+      const propsStr = Object.entries(selectedNode.props || {})
+        .map(([k, v]) =>
+          v?.type === 'string' ? `${k}="${v.value}"` : v?.type === 'expr' ? `${k}={${v.value}}` : k
+        )
+        .join(' ')
+        .slice(0, 300);
+      lines.push(
+        `Selected ${selectedNode.kind}: <${selectedNode.name || selectedNode.kind}${propsStr ? ' ' + propsStr : ''}>`
+      );
+      const findText = (n) => {
+        if (!n) return null;
+        if (n.kind === 'text' && n.value?.trim()) return n.value.trim();
+        for (const c of n.children || []) {
+          const t = findText(c);
+          if (t) return t;
+        }
+        return null;
+      };
+      const firstText = findText(selectedNode);
+      if (firstText) lines.push(`Its text starts: "${firstText.slice(0, 120)}"`);
+    }
+    aiContext = {
+      summary: (crumbs.length ? crumbs.map((c) => c.label).join(' › ') : project.name).slice(0, 70),
+      block: lines.join('\n'),
+    };
+  }
+
   // Canvas outlines: nodes are addressed by their index path in the tree
   // (matching the marker paths the dev server's plugin injects).
   const pathFor = (id) => {
@@ -2173,6 +2229,8 @@ export default function App() {
         <LeftRail
           active={leftTab}
           onSelect={(id) => setLeftTab((t) => (t === id ? null : id))}
+          aiOpen={aiOpen}
+          onToggleAi={() => setAiOpen((v) => !v)}
         />
 
         {leftTab && (
@@ -2245,6 +2303,7 @@ export default function App() {
                 onPickCancel={endAssetPick}
               />
             )}
+            {leftTab === 'settings' && <SettingsPanel project={project} />}
           </div>
         )}
 
@@ -2324,6 +2383,15 @@ export default function App() {
             />
           )}
         </div>
+
+        {aiOpen && (
+          <AiPanel
+            project={project}
+            context={aiContext}
+            onClose={() => setAiOpen(false)}
+            showToast={showToast}
+          />
+        )}
 
         {inPreview && previewSrc && (
           <div className="preview-mode">
