@@ -189,39 +189,45 @@ export default function AiPanel({ project, context, onClose, showToast }) {
 
   const effInputH = inputH ?? autoH;
 
-  // drag the grip to set the input height by hand; double-click resets
-  const onInputGrip = (e) => {
+  // pointer capture keeps the drag alive over the preview iframe and
+  // guarantees the release is seen — without it the handle sticks to the cursor
+  const dragWith = (e, onMove) => {
     e.preventDefault();
     e.stopPropagation();
-    const startY = e.clientY;
-    const startH = effInputH;
-    const move = (ev) => {
-      const h = Math.min(Math.max(startH + (startY - ev.clientY), 52), window.innerHeight * 0.7);
-      setInputH(h);
-    };
+    const grip = e.currentTarget;
+    try {
+      grip.setPointerCapture(e.pointerId);
+    } catch {
+      /* older engines */
+    }
     const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointermove', onMove);
+      grip.removeEventListener('pointerup', up);
+      grip.removeEventListener('pointercancel', up);
     };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    grip.addEventListener('pointermove', onMove);
+    grip.addEventListener('pointerup', up);
+    grip.addEventListener('pointercancel', up);
   };
 
-  // drag to resize
-  const onDragStart = (e) => {
-    e.preventDefault();
+  // drag the grip to set the input height by hand; double-click resets
+  const onInputGrip = (e) => {
     const startY = e.clientY;
-    const startH = height;
-    const move = (ev) => {
-      const h = Math.min(Math.max(startH + (startY - ev.clientY), 160), window.innerHeight * 0.7);
-      setHeight(h);
-    };
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
+    const startH = effInputH;
+    dragWith(e, (ev) => {
+      setInputH(Math.min(Math.max(startH + (startY - ev.clientY), 52), window.innerHeight * 0.7));
+    });
+  };
+
+  // drag to resize the whole panel, up to the full page
+  const onDragStart = (e) => {
+    const drawer = e.currentTarget.parentElement;
+    const maxH = (drawer?.parentElement?.clientHeight || window.innerHeight) - 28;
+    const startY = e.clientY;
+    const startH = drawer?.getBoundingClientRect().height || height;
+    dragWith(e, (ev) => {
+      setHeight(Math.min(Math.max(startH + (startY - ev.clientY), 160), maxH));
+    });
   };
 
   const addedProviders = providers?.filter((p) => added.includes(p.id)) || [];

@@ -2889,6 +2889,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 .rail { padding-bottom: 10px; }
 
 .ai-drawer {
+  max-height: calc(100% - 28px);
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
