@@ -2940,6 +2940,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   color: var(--text-dim);
   font-size: 11px;
 }
+.ai-head .spacer { flex: 1; }
 .ai-head .ghost { padding: 4px; background: transparent; }
 .ai-head .ghost:hover { background: var(--bg-hover); }
 
