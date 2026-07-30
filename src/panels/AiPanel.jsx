@@ -2,59 +2,48 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon, PlusIcon, SparkleIcon, SendIcon, StopSquareIcon, FileIcon, TagIcon } from '../ui/Icons.jsx';
 
 const SYSTEM_PROMPT = [
-  'You are the AI assistant built into Stacki, a visual editor for Astro projects.',
+  'You are the AI assistant built into StackiBoost, a visual editor for Astro projects.',
   'The user sees a live canvas of their site; your file edits hot-reload instantly.',
   'A <stacki-context> block in each message tells you which page is open and which element is selected — start there.',
   'Edit project files directly. Keep replies short and plain; the user is in a design tool, not a terminal.',
   'The Astro dev server is already running. Never start dev servers, never commit to git unless asked.',
 ].join(' ');
 
-function toolLabel(block) {
-  const input = block.input || {};
-  const rel = (p) => (typeof p === 'string' ? p.replace(/^.*\/src\//, 'src/') : '');
-  switch (block.name) {
-    case 'Edit':
-    case 'MultiEdit':
-      return { verb: 'Editing', detail: rel(input.file_path) };
-    case 'Write':
-      return { verb: 'Writing', detail: rel(input.file_path) };
-    case 'Read':
-      return { verb: 'Reading', detail: rel(input.file_path) };
-    case 'Bash':
-      return { verb: 'Running', detail: (input.command || '').slice(0, 80) };
-    case 'Glob':
-    case 'Grep':
-      return { verb: 'Searching', detail: input.pattern || '' };
-    case 'TodoWrite':
-      return { verb: 'Planning', detail: '' };
-    case 'Task':
-      return { verb: 'Working', detail: input.description || '' };
-    case 'WebSearch':
-      return { verb: 'Searching web', detail: input.query || '' };
-    case 'WebFetch':
-      return { verb: 'Fetching', detail: input.url || '' };
-    default:
-      return { verb: block.name, detail: '' };
-  }
-}
-
 export default function AiPanel({ project, context, onClose, showToast }) {
   const [messages, setMessages] = useState([]);
   const [live, setLive] = useState('');
   const [input, setInput] = useState('');
   const [running, setRunning] = useState(false);
-  const [status, setStatus] = useState(null);
+  const [providers, setProviders] = useState(null);
+  const [provider, setProvider] = useState(() => localStorage.getItem('ai-provider') || 'claude');
   const [height, setHeight] = useState(300);
-  const sessionRef = useRef(null);
+  const sessionsRef = useRef({});
+  const providerRef = useRef(provider);
+  providerRef.current = provider;
+  const liveRef = useRef('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const contextRef = useRef(context);
   contextRef.current = context;
 
   useEffect(() => {
-    window.avb.aiStatus().then(setStatus).catch(() => setStatus({ available: false }));
+    window.avb
+      .aiStatus()
+      .then((s) => {
+        setProviders(s.providers);
+        const cur = s.providers.find((p) => p.id === (localStorage.getItem('ai-provider') || 'claude'));
+        if (cur && !cur.available) {
+          const fallback = s.providers.find((p) => p.available);
+          if (fallback) setProvider(fallback.id);
+        }
+      })
+      .catch(() => setProviders([]));
     inputRef.current?.focus();
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('ai-provider', provider);
+  }, [provider]);
 
   // escape closes the panel
   useEffect(() => {
@@ -73,59 +62,52 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, live]);
 
+  const setLiveText = (fn) => {
+    setLive((t) => {
+      const v = fn(t);
+      liveRef.current = v;
+      return v;
+    });
+  };
+
+  const pushBlocks = (blocks) => {
+    setMessages((ms) => {
+      const last = ms[ms.length - 1];
+      if (last?.role === 'assistant' && !last.done) {
+        return [...ms.slice(0, -1), { ...last, blocks: [...last.blocks, ...blocks] }];
+      }
+      return [...ms, { role: 'assistant', blocks, done: false }];
+    });
+  };
+
+  const finish = (error) => {
+    const leftover = liveRef.current.trim();
+    if (leftover) pushBlocks([{ type: 'text', text: leftover }]);
+    setLiveText(() => '');
+    setRunning(false);
+    setMessages((ms) => {
+      const out = ms.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m));
+      if (error) out.push({ role: 'error', text: error });
+      return out;
+    });
+  };
+
   useEffect(() => {
     const off = window.avb.onAiEvent((e) => {
-      if (e.type === 'system' && e.subtype === 'init') {
-        sessionRef.current = e.session_id;
-        return;
-      }
-      if (e.type === 'stream_event') {
-        const ev = e.event;
-        if (ev?.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
-          setLive((t) => t + ev.delta.text);
-        }
-        return;
-      }
-      if (e.type === 'assistant') {
-        const blocks = (e.message?.content || [])
-          .map((b) =>
-            b.type === 'text'
-              ? { type: 'text', text: b.text }
-              : b.type === 'tool_use'
-                ? { type: 'tool', ...toolLabel(b) }
-                : null
-          )
-          .filter(Boolean);
-        setLive('');
-        if (!blocks.length) return;
-        setMessages((ms) => {
-          const last = ms[ms.length - 1];
-          if (last?.role === 'assistant' && !last.done) {
-            return [...ms.slice(0, -1), { ...last, blocks: [...last.blocks, ...blocks] }];
-          }
-          return [...ms, { role: 'assistant', blocks, done: false }];
-        });
-        return;
-      }
-      if (e.type === 'result') {
-        if (e.session_id) sessionRef.current = e.session_id;
-        setRunning(false);
-        setLive('');
-        setMessages((ms) => {
-          const out = ms.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m));
-          if (e.is_error) {
-            out.push({ role: 'error', text: e.result || e.subtype || 'Something went wrong.' });
-          }
-          return out;
-        });
-        return;
-      }
-      if (e.type === 'closed') {
-        setRunning(false);
-        setLive('');
-        if (e.error) {
-          setMessages((ms) => [...ms, { role: 'error', text: e.error }]);
-        }
+      if (e.kind === 'init' && e.sessionId) {
+        sessionsRef.current[providerRef.current] = e.sessionId;
+      } else if (e.kind === 'delta') {
+        setLiveText((t) => t + e.text);
+      } else if (e.kind === 'text') {
+        setLiveText(() => '');
+        if (e.text?.trim()) pushBlocks([{ type: 'text', text: e.text }]);
+      } else if (e.kind === 'tool') {
+        pushBlocks([{ type: 'tool', verb: e.verb, detail: e.detail }]);
+      } else if (e.kind === 'result') {
+        if (e.sessionId) sessionsRef.current[providerRef.current] = e.sessionId;
+        finish(e.error || null);
+      } else if (e.kind === 'closed') {
+        finish(e.error || null);
       }
     });
     return off;
@@ -146,26 +128,30 @@ export default function AiPanel({ project, context, onClose, showToast }) {
       await window.avb.aiSend({
         projectPath: project.path,
         prompt,
-        sessionId: sessionRef.current,
+        sessionId: sessionsRef.current[provider] || null,
         systemPrompt: SYSTEM_PROMPT,
+        provider,
       });
     } catch (err) {
       setRunning(false);
-      const msg = err?.message || String(err);
-      setMessages((ms) => [...ms, { role: 'error', text: msg.replace(/^Error invoking remote method '[^']+':\s*(Error:\s*)?/, '') }]);
+      const msg = (err?.message || String(err)).replace(
+        /^Error invoking remote method '[^']+':\s*(Error:\s*)?/,
+        ''
+      );
+      setMessages((ms) => [...ms, { role: 'error', text: msg }]);
     }
-  }, [input, running, project]);
+  }, [input, running, project, provider]);
 
   const stop = useCallback(() => {
     window.avb.aiStop();
-    setRunning(false);
+    finish(null);
   }, []);
 
   const newChat = useCallback(() => {
     if (running) window.avb.aiStop();
-    sessionRef.current = null;
+    sessionsRef.current = {};
     setMessages([]);
-    setLive('');
+    setLiveText(() => '');
     setRunning(false);
     inputRef.current?.focus();
   }, [running]);
@@ -187,7 +173,9 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     window.addEventListener('pointerup', up);
   };
 
-  const unavailable = status && !status.available;
+  const current = providers?.find((p) => p.id === provider);
+  const noneAvailable = providers && !providers.some((p) => p.available);
+  const unavailable = providers && (!current || !current.available);
 
   return (
     <div className="ai-drawer" style={{ height }}>
@@ -200,22 +188,28 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         <button className="ghost" title="New chat" onClick={newChat}>
           <PlusIcon size={13} />
         </button>
-        <button className="ghost" title="Close (⌘J)" onClick={onClose}>
+        <button className="ghost" title="Close (Esc)" onClick={onClose}>
           <CloseIcon size={13} />
         </button>
       </div>
 
       <div className="ai-scroll" ref={scrollRef}>
-        {unavailable && (
+        {noneAvailable && (
           <div className="ai-empty">
-            <p>Claude Code isn't installed (or isn't on your PATH).</p>
+            <p>No AI provider found. Install one and log in, then check Settings → Connected models:</p>
             <p>
-              Install it from{' '}
-              <a onClick={() => window.avb.openExternal('https://claude.com/claude-code')}>
-                claude.com/claude-code
-              </a>
-              , run <code>claude</code> once in a terminal to log in, then reopen this panel.
+              <a onClick={() => window.avb.openExternal('https://claude.com/claude-code')}>Claude Code</a>
+              {' · '}
+              <a onClick={() => window.avb.openExternal('https://developers.openai.com/codex/cli')}>Codex CLI</a>
+              {' · '}
+              <a onClick={() => window.avb.openExternal('https://github.com/google-gemini/gemini-cli')}>Gemini CLI</a>
             </p>
+          </div>
+        )}
+        {unavailable && !noneAvailable && current && (
+          <div className="ai-empty">
+            <p>{current.name} isn't installed.</p>
+            <p className="dim">{current.loginHint}</p>
           </div>
         )}
         {!unavailable && messages.length === 0 && !live && (
@@ -256,7 +250,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         <textarea
           ref={inputRef}
           className="ai-input"
-          placeholder={running ? 'Claude is working…' : 'Describe a change…'}
+          placeholder={running ? 'Working…' : 'Describe a change…'}
           value={input}
           rows={1}
           onChange={(e) => setInput(e.target.value)}
@@ -279,6 +273,22 @@ export default function AiPanel({ project, context, onClose, showToast }) {
             </span>
           )}
           <span className="spacer" />
+          {providers && providers.length > 0 && (
+            <select
+              className="ai-model"
+              value={provider}
+              disabled={running}
+              onClick={(e) => e.stopPropagation()}
+              onChange={(e) => setProvider(e.target.value)}
+              title="Model"
+            >
+              {providers.map((p) => (
+                <option key={p.id} value={p.id} disabled={!p.available}>
+                  {p.name}{p.available ? '' : ' (not installed)'}
+                </option>
+              ))}
+            </select>
+          )}
           {running ? (
             <button className="ai-send stop" title="Stop" onClick={(e) => { e.stopPropagation(); stop(); }}>
               <StopSquareIcon size={13} />

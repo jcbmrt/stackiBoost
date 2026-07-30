@@ -3091,3 +3091,28 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 }
 .settings-steps { display: flex; flex-direction: column; gap: 6px; color: var(--text-dim); font-size: 11.5px; }
 .settings-actions { display: flex; gap: 8px; margin-top: 4px; }
+
+/* connected models */
+.settings-provider {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+.settings-provider .settings-actions { margin-top: 2px; }
+.ai-model {
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-dim);
+  font-family: var(--font);
+  font-size: 11px;
+  padding: 3px 6px;
+  outline: none;
+  cursor: pointer;
+  max-width: 130px;
+}
+.ai-model:hover { color: var(--text); }

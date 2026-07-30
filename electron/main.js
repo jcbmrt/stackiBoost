@@ -27,7 +27,7 @@ const {
   parseSlots,
 } = require('./astroParser');
 const { scaffoldProject } = require('./scaffold');
-const { registerClaudeAgent } = require('./claudeAgent');
+const { registerAiProviders } = require('./aiProviders');
 const { importersOf } = require('./cmsRefs');
 const { autoUpdater } = require('electron-updater');
 
@@ -2493,4 +2493,4 @@ ipcMain.handle('shell:openExternal', async (_e, url) => {
 });
 
 // ai panel
-registerClaudeAgent({ ipcMain, send, ensureToolPath });
+registerAiProviders({ ipcMain, send, ensureToolPath });
