@@ -654,6 +654,18 @@ export const SlidersIcon = (p) => (
   </I>
 );
 
+export const SendIcon = (p) => (
+  <I {...p}>
+    <path d="M8 12.5v-9M4.5 7 8 3.5 11.5 7" />
+  </I>
+);
+
+export const StopSquareIcon = (p) => (
+  <I {...p} filled>
+    <rect x="4.75" y="4.75" width="6.5" height="6.5" rx="1.2" />
+  </I>
+);
+
 export const TrashIcon = (p) => (
   <I {...p}>
     <path d="M3 4.5h10M6.5 2.5h3M5.5 4.5l.5 9h4l.5-9" />

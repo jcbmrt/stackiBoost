@@ -2070,6 +2070,8 @@ export default function App() {
     }
     aiContext = {
       summary: (crumbs.length ? crumbs.map((c) => c.label).join(' › ') : project.name).slice(0, 70),
+      pageLabel: crumbs[0]?.label || currentPage?.name || null,
+      selLabel: crumbs.length > 1 ? crumbs[crumbs.length - 1].label : null,
       block: lines.join('\n'),
     };
   }

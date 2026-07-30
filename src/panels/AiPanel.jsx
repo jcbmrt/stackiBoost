@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CloseIcon, PlusIcon, SparkleIcon } from '../ui/Icons.jsx';
+import { CloseIcon, PlusIcon, SparkleIcon, SendIcon, StopSquareIcon, FileIcon, TagIcon } from '../ui/Icons.jsx';
 
 const SYSTEM_PROMPT = [
   'You are the AI assistant built into Stacki, a visual editor for Astro projects.',
@@ -196,7 +196,6 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         <span className="ai-title">
           <SparkleIcon size={13} /> AI
         </span>
-        {context?.summary && <span className="ai-context-chip" title={context.block}>{context.summary}</span>}
         <span className="spacer" />
         <button className="ghost" title="New chat" onClick={newChat}>
           <PlusIcon size={13} />
@@ -253,7 +252,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         {running && !live && <div className="ai-thinking">Thinking…</div>}
       </div>
 
-      <div className="ai-inputrow">
+      <div className="ai-composer" onClick={() => inputRef.current?.focus()}>
         <textarea
           ref={inputRef}
           className="ai-input"
@@ -268,13 +267,36 @@ export default function AiPanel({ project, context, onClose, showToast }) {
             }
           }}
         />
-        {running ? (
-          <button className="ai-stop" onClick={stop}>Stop</button>
-        ) : (
-          <button className="primary" disabled={!input.trim() || unavailable} onClick={send}>
-            Send
-          </button>
-        )}
+        <div className="ai-composer-bar">
+          {context?.pageLabel && (
+            <span className="ai-chip" title={context.block}>
+              <FileIcon size={11} /> {context.pageLabel}
+            </span>
+          )}
+          {context?.selLabel && (
+            <span className="ai-chip sel" title={context.summary}>
+              <TagIcon size={11} /> {context.selLabel}
+            </span>
+          )}
+          <span className="spacer" />
+          {running ? (
+            <button className="ai-send stop" title="Stop" onClick={(e) => { e.stopPropagation(); stop(); }}>
+              <StopSquareIcon size={13} />
+            </button>
+          ) : (
+            <button
+              className="ai-send"
+              title="Send (Enter)"
+              disabled={!input.trim() || unavailable}
+              onClick={(e) => {
+                e.stopPropagation();
+                send();
+              }}
+            >
+              <SendIcon size={14} strokeWidth={1.6} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
