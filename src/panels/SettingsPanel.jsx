@@ -1,17 +1,46 @@
 import React, { useEffect, useState } from 'react';
-import { SparkleIcon } from '../ui/Icons.jsx';
+import { SparkleIcon, PlusIcon } from '../ui/Icons.jsx';
+import { getAiModels, setAiModels } from '../aiModels.js';
 
 export default function SettingsPanel({ project }) {
   const [providers, setProviders] = useState(null);
+  const [added, setAdded] = useState(() => getAiModels() || []);
+  const [picking, setPicking] = useState(false);
   const [tests, setTests] = useState({}); // id -> 'running' | {ok, error}
 
   const refresh = () => {
     window.avb
       .aiStatus()
-      .then((s) => setProviders(s.providers))
+      .then((s) => {
+        setProviders(s.providers);
+        if (getAiModels() === null) {
+          const seed = s.providers.find((p) => p.id === 'claude' && p.available) ? ['claude'] : [];
+          setAiModels(seed);
+          setAdded(seed);
+        }
+      })
       .catch(() => setProviders([]));
   };
   useEffect(refresh, []);
+
+  useEffect(() => {
+    const on = () => setAdded(getAiModels() || []);
+    window.addEventListener('ai-models-changed', on);
+    return () => window.removeEventListener('ai-models-changed', on);
+  }, []);
+
+  const addModel = (id) => {
+    const next = [...added, id];
+    setAiModels(next);
+    setAdded(next);
+    setPicking(false);
+  };
+
+  const removeModel = (id) => {
+    const next = added.filter((x) => x !== id);
+    setAiModels(next);
+    setAdded(next);
+  };
 
   const runTest = async (id) => {
     setTests((t) => ({ ...t, [id]: 'running' }));
@@ -23,6 +52,9 @@ export default function SettingsPanel({ project }) {
     }
   };
 
+  const addedProviders = providers?.filter((p) => added.includes(p.id)) || [];
+  const addable = providers?.filter((p) => !added.includes(p.id)) || [];
+
   return (
     <div className="settings-panel">
       <div className="panel-title">Settings</div>
@@ -32,12 +64,13 @@ export default function SettingsPanel({ project }) {
           <SparkleIcon size={14} /> Connected models
         </div>
         <p className="settings-note">
-          The AI panel runs whichever coding CLI you have installed and logged into —
-          your own subscriptions, no API keys. Pick the model in the chat's dropdown.
+          The AI panel runs a coding CLI installed on your machine, using your own subscription.
+          No API keys. Add the models you want; with more than one connected you can switch in the chat.
         </p>
 
         {providers === null && <span className="dim">checking…</span>}
-        {providers?.map((p) => {
+
+        {addedProviders.map((p) => {
           const test = tests[p.id];
           return (
             <div key={p.id} className="settings-provider">
@@ -61,10 +94,11 @@ export default function SettingsPanel({ project }) {
                 ) : (
                   <button onClick={() => window.avb.openExternal(p.installUrl)}>Get {p.name}</button>
                 )}
+                <button className="ghost" onClick={() => removeModel(p.id)}>Remove</button>
               </div>
               {test && test !== 'running' && (
                 <div className={test.ok ? 'settings-ok' : 'settings-bad'}>
-                  {test.ok ? 'Connected — ready to use.' : `Not working: ${test.error}`}
+                  {test.ok ? 'Connected. Ready to use.' : `Not working: ${test.error}`}
                 </div>
               )}
               {test && test !== 'running' && !test.ok && /login|auth|credit|api key|account/i.test(test.error || '') && (
@@ -73,9 +107,36 @@ export default function SettingsPanel({ project }) {
             </div>
           );
         })}
-        {providers && (
+
+        {providers && addedProviders.length === 0 && !picking && (
+          <p className="settings-note dim">No models added yet.</p>
+        )}
+
+        {providers && addable.length > 0 && !picking && (
           <div className="settings-actions">
-            <button className="ghost" onClick={refresh}>Re-check all</button>
+            <button onClick={() => setPicking(true)}>
+              <PlusIcon size={12} /> Add model
+            </button>
+          </div>
+        )}
+
+        {picking && (
+          <div className="settings-pick">
+            {addable.map((p) => (
+              <button key={p.id} className="settings-pick-row" onClick={() => addModel(p.id)}>
+                <span>
+                  {p.name} <span className="dim">· {p.vendor}</span>
+                </span>
+                {p.available ? (
+                  <span className="settings-ok">Connected</span>
+                ) : (
+                  <span className="dim">Not installed</span>
+                )}
+              </button>
+            ))}
+            <div className="settings-actions">
+              <button className="ghost" onClick={() => setPicking(false)}>Cancel</button>
+            </div>
           </div>
         )}
       </div>

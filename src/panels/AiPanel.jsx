@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CloseIcon, PlusIcon, SparkleIcon, SendIcon, StopSquareIcon, FileIcon, TagIcon } from '../ui/Icons.jsx';
+import { getAiModels, setAiModels } from '../aiModels.js';
 
 const SYSTEM_PROMPT = [
   'You are the AI assistant built into StackiBoost, a visual editor for Astro projects.',
@@ -15,6 +16,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
   const [input, setInput] = useState('');
   const [running, setRunning] = useState(false);
   const [providers, setProviders] = useState(null);
+  const [added, setAdded] = useState(() => getAiModels() || []);
   const [provider, setProvider] = useState(() => localStorage.getItem('ai-provider') || 'claude');
   const [height, setHeight] = useState(300);
   const [autoH, setAutoH] = useState(52); // grows with content up to ~5 lines
@@ -33,15 +35,31 @@ export default function AiPanel({ project, context, onClose, showToast }) {
       .aiStatus()
       .then((s) => {
         setProviders(s.providers);
-        const cur = s.providers.find((p) => p.id === (localStorage.getItem('ai-provider') || 'claude'));
-        if (cur && !cur.available) {
-          const fallback = s.providers.find((p) => p.available);
-          if (fallback) setProvider(fallback.id);
+        if (getAiModels() === null) {
+          const seed = s.providers.find((p) => p.id === 'claude' && p.available) ? ['claude'] : [];
+          setAiModels(seed);
+          setAdded(seed);
         }
       })
       .catch(() => setProviders([]));
     inputRef.current?.focus();
   }, []);
+
+  // settings can add/remove models while the chat is open
+  useEffect(() => {
+    const on = () => setAdded(getAiModels() || []);
+    window.addEventListener('ai-models-changed', on);
+    return () => window.removeEventListener('ai-models-changed', on);
+  }, []);
+
+  // keep the selected model inside the added list
+  useEffect(() => {
+    if (!providers || added.includes(provider)) return;
+    const first =
+      providers.find((p) => added.includes(p.id) && p.available) ||
+      providers.find((p) => added.includes(p.id));
+    if (first) setProvider(first.id);
+  }, [providers, added, provider]);
 
   useEffect(() => {
     localStorage.setItem('ai-provider', provider);
@@ -206,8 +224,9 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     window.addEventListener('pointerup', up);
   };
 
-  const current = providers?.find((p) => p.id === provider);
-  const noneAvailable = providers && !providers.some((p) => p.available);
+  const addedProviders = providers?.filter((p) => added.includes(p.id)) || [];
+  const current = addedProviders.find((p) => p.id === provider);
+  const noneAdded = providers && addedProviders.length === 0;
   const unavailable = providers && (!current || !current.available);
   const compact = messages.length === 0 && !live && !running;
 
@@ -219,7 +238,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
       {!compact && <div className="ai-resize" onPointerDown={onDragStart} />}
       <div className="ai-head">
         <span className="ai-title">
-          <SparkleIcon size={13} /> AI Mode <span className="ai-sub">— Ask for anything</span>
+          <SparkleIcon size={13} /> AI Mode <span className="ai-sub">- Ask for anything</span>
         </span>
         <span className="spacer" />
         <button className="ghost" title="New chat" onClick={newChat}>
@@ -230,16 +249,10 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         </button>
       </div>
 
-      {compact && noneAvailable && (
-        <div className="ai-note">
-          No AI provider found — install{' '}
-          <a onClick={() => window.avb.openExternal('https://claude.com/claude-code')}>Claude Code</a>,{' '}
-          <a onClick={() => window.avb.openExternal('https://developers.openai.com/codex/cli')}>Codex CLI</a> or{' '}
-          <a onClick={() => window.avb.openExternal('https://github.com/google-gemini/gemini-cli')}>Gemini CLI</a>, log
-          in, then check Settings.
-        </div>
+      {compact && noneAdded && (
+        <div className="ai-note">No model added yet. Add one in Settings (the gear on the left rail).</div>
       )}
-      {compact && unavailable && !noneAvailable && current && (
+      {compact && unavailable && !noneAdded && current && (
         <div className="ai-note">{current.name} isn't installed. {current.loginHint}</div>
       )}
 
@@ -308,7 +321,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
             </span>
           )}
           <span className="spacer" />
-          {providers && providers.length > 0 && (
+          {addedProviders.length > 1 && (
             <select
               className="ai-model"
               value={provider}
@@ -317,7 +330,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
               onChange={(e) => setProvider(e.target.value)}
               title="Model"
             >
-              {providers.map((p) => (
+              {addedProviders.map((p) => (
                 <option key={p.id} value={p.id} disabled={!p.available}>
                   {p.name}{p.available ? '' : ' (not installed)'}
                 </option>

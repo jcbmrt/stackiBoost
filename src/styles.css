@@ -3123,16 +3123,39 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 }
 .settings-provider .settings-actions { margin-top: 2px; }
 .ai-model {
-  background: var(--bg-hover);
+  appearance: none;
+  -webkit-appearance: none;
+  width: auto;
+  background-color: var(--bg-hover);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5' fill='none'><path d='M1 1l3 3 3-3' stroke='%23999999' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--text-dim);
   font-family: var(--font);
   font-size: 11px;
-  padding: 3px 6px;
+  padding: 4px 36px 4px 9px;
   outline: none;
   cursor: pointer;
-  max-width: 130px;
 }
 .ai-model:hover { color: var(--text); }
+
+.settings-pick {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.settings-pick-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  text-align: left;
+}
+.settings-pick-row:hover { border-color: var(--border-strong); }
 .ai-drawer.compact .ai-composer { margin-top: 10px; }
