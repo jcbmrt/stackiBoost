@@ -366,6 +366,11 @@ export default function App() {
   // not silently drop the user out of the view they picked (which would
   // reload every preview iframe and flash the canvas white).
   const [device, setDevice] = useState('desktop');
+  // scripts in the design preview: off hides cookie banners etc while editing
+  const [scriptsOn, setScriptsOn] = useState(() => localStorage.getItem('avb-scripts') !== 'off');
+  useEffect(() => {
+    localStorage.setItem('avb-scripts', scriptsOn ? 'on' : 'off');
+  }, [scriptsOn]);
   // which frame was last clicked in canvas mode, so styles + ai target it
   const [canvasBp, setCanvasBp] = useState('desktop');
   // Bumped every time the page itself makes the selection, so the navigator
@@ -2400,6 +2405,8 @@ export default function App() {
             canvasBp={canvasBp}
             onCanvasBp={setCanvasBp}
             onDeselect={() => setSelectedId(null)}
+            scriptsOn={scriptsOn}
+            onScriptsOn={setScriptsOn}
             onSelectPath={(p) => {
               // Editing a component: the canvas still shows the whole page, so
               // a click in the dimmed area (or on nothing) means "I'm done in

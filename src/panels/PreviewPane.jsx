@@ -14,6 +14,7 @@ import {
   CodeIcon,
   CustomElementIcon,
   elementIcon,
+  CodeSlashIcon,
 } from '../ui/Icons.jsx';
 
 // The overlay label wears the same icon the Navigator row does, so a node
@@ -69,6 +70,8 @@ export default function PreviewPane({
   canvasBp,
   onCanvasBp,
   onDeselect,
+  scriptsOn,
+  onScriptsOn,
 }) {
   // The breakpoint lives in App so a re-mount of this pane can't silently
   // kick the user out of a view (which would reload every preview iframe).
@@ -354,6 +357,14 @@ export default function PreviewPane({
             </button>
           ))}
         </div>
+        <button
+          className={`script-toggle ${scriptsOn ? 'on' : ''}`}
+          title={scriptsOn ? 'Scripts run in the preview. Click to show HTML + CSS only.' : 'Scripts are off in the preview. Click to run them.'}
+          onClick={() => onScriptsOn(!scriptsOn)}
+        >
+          <CodeSlashIcon size={13} />
+          <span className="switch" />
+        </button>
         {device !== 'canvas' && (
           <div className="width-readout" title="Viewport width. Click to type one.">
             {editingW ? (
@@ -387,6 +398,7 @@ export default function PreviewPane({
           <CanvasView
             url={url}
             refreshKey={refreshKey}
+            scriptsOn={scriptsOn}
             selPath={selPath}
             onSelectPath={onSelectPath}
             onOpenPath={onOpenPath}
@@ -415,9 +427,9 @@ export default function PreviewPane({
           >
             <div className="frame-clip">
               <iframe
-                key={`${url}-${refreshKey}`}
+                key={`${url}-${refreshKey}-${scriptsOn ? 's' : 'ns'}`}
                 ref={iframeRef}
-                src={`${url}#avb-design`}
+                src={`${url}#avb-design${scriptsOn ? '' : ',avb-noscript'}`}
                 title="Site preview"
                 onLoad={sendTrack}
               />

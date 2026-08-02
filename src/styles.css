@@ -3351,3 +3351,39 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   flex-shrink: 0;
 }
 .ai-tab-x:hover { color: var(--text); background: var(--bg-hover); }
+
+/* scripts-in-preview toggle */
+.script-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: 6px;
+  padding: 4px 8px;
+  background: transparent;
+  color: var(--text-faint);
+}
+.script-toggle:hover { background: var(--bg-hover); }
+.script-toggle.on { color: var(--text-dim); }
+.script-toggle .switch {
+  position: relative;
+  width: 24px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--bg-active);
+  border: 1px solid var(--border);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.script-toggle .switch::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--text-dim);
+  transition: transform 0.15s, background 0.15s;
+}
+.script-toggle.on .switch { background: var(--accent-soft); border-color: var(--accent); }
+.script-toggle.on .switch::after { transform: translateX(10px); background: var(--accent); }

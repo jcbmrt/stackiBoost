@@ -22,7 +22,7 @@ const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onOpenPath, activeKey, onActivate, onDeselect }) {
+export default function CanvasView({ url, refreshKey, scriptsOn, selPath, onSelectPath, onOpenPath, activeKey, onActivate, onDeselect }) {
   const wrapRef = React.useRef(null);
   const iframeRefs = React.useRef({}); // key -> iframe element
   const [view, setView] = React.useState(null); // {x, y, s}
@@ -273,9 +273,9 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
                 {f.label} · {f.width}px
               </div>
               <iframe
-                key={`${url}-${refreshKey}`}
+                key={`${url}-${refreshKey}-${scriptsOn ? 's' : 'ns'}`}
                 ref={(el) => (iframeRefs.current[f.key] = el)}
-                src={`${url}#avb-design,avb-canvas`}
+                src={`${url}#avb-design,avb-canvas${scriptsOn ? '' : ',avb-noscript'}`}
                 title={`${f.label} preview`}
                 onLoad={(e) => {
                   e.currentTarget.contentWindow?.postMessage(

@@ -8,6 +8,21 @@ if (!process.isMainFrame) {
   // They get an editor cursor (no I-beam over text) and links/forms are
   // inert — navigation only happens in the interactive preview mode.
   if (location.hash.includes('avb-design')) {
+    // scripts-off preview: neuter script tags before the parser runs them,
+    // except vite's client so hot reload keeps working
+    if (location.hash.includes('avb-noscript')) {
+      const allowed = (el) => /\/@vite\/client|vite\/dist\/client/.test(el.src || '');
+      new MutationObserver((muts) => {
+        for (const m of muts) {
+          for (const n of m.addedNodes) {
+            if (n.nodeType === 1 && n.tagName === 'SCRIPT' && !allowed(n)) {
+              n.type = 'text/avb-blocked';
+              if (n.src) n.removeAttribute('src');
+            }
+          }
+        }
+      }).observe(document, { childList: true, subtree: true });
+    }
     // canvas frames show the full page, so wheel means pan/zoom the canvas,
     // not scroll the page: forward it to the parent
     if (location.hash.includes('avb-canvas')) {
