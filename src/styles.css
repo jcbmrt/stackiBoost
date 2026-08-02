@@ -114,21 +114,22 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .titlebar .url-group {
   display: flex;
   align-items: center;
-  gap: 6px;
-  width: min(560px, 42vw);
-}
-.titlebar .url {
-  flex: 1;
-  font-size: 11px;
-  color: var(--text-dim);
+  gap: 16px;
   background: var(--bg-input);
   border-radius: 8px;
-  padding: 5px 12px;
+  padding: 4px 32px;
+  max-width: min(640px, 46vw);
+}
+.titlebar .url-group .ghost { padding: 2px; background: transparent; }
+.titlebar .url-group .ghost:hover:not(:disabled) { color: var(--text); }
+.titlebar .url {
+  font-size: 11px;
+  color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  text-align: center;
   font-weight: 450;
+  min-width: 0;
 }
 
 /* Title-bar page switcher */

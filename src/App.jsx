@@ -2240,6 +2240,9 @@ export default function App() {
             className={`status-dot ${devStatus === 'on' ? 'on' : devStatus === 'starting' ? 'starting' : 'off'}`}
             title={`Dev server: ${devStatus}`}
           />
+          <span className="url">
+            {liveUrl || (devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline')}
+          </span>
           <button
             className="ghost"
             title="Reload preview"
@@ -2248,9 +2251,6 @@ export default function App() {
           >
             <RefreshIcon size={13} />
           </button>
-          <span className="url">
-            {liveUrl || (devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline')}
-          </span>
         </div>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}
