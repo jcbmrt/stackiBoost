@@ -12,9 +12,9 @@ const SYSTEM_PROMPT = [
 
 const MAX_TABS = 5;
 let tabSeq = 1;
-const makeTab = (provider) => ({
+const makeTab = (provider, num) => ({
   id: `t${Date.now().toString(36)}-${tabSeq++}`,
-  title: null,
+  num,
   messages: [],
   live: '',
   input: '',
@@ -27,7 +27,7 @@ const makeTab = (provider) => ({
 
 export default function AiPanel({ project, context, hidden, onClose, onFinished, showToast }) {
   const defaultProvider = () => localStorage.getItem('ai-provider') || 'claude';
-  const [tabs, setTabs] = useState(() => [makeTab(defaultProvider())]);
+  const [tabs, setTabs] = useState(() => [makeTab(defaultProvider(), 1)]);
   const [activeId, setActiveId] = useState(() => null);
   const [providers, setProviders] = useState(null);
   const [added, setAdded] = useState(() => getAiModels() || []);
@@ -183,7 +183,6 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     const prompt = ctx?.block ? `<stacki-context>\n${ctx.block}\n</stacki-context>\n\n${text}` : text;
     patchTab(tab.id, (t) => ({
       input: '',
-      title: t.title || text.slice(0, 24),
       running: true,
       unread: false,
       messages: [
@@ -225,7 +224,10 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
   const addTab = useCallback(() => {
     setTabs((ts) => {
       if (ts.length >= MAX_TABS) return ts;
-      const t = makeTab(ts[ts.length - 1]?.provider || defaultProvider());
+      const used = new Set(ts.map((t) => t.num));
+      let num = 1;
+      while (used.has(num)) num++;
+      const t = makeTab(ts[ts.length - 1]?.provider || defaultProvider(), num);
       setActiveId(t.id);
       return [...ts, t];
     });
@@ -237,7 +239,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       setTabs((ts) => {
         const idx = ts.findIndex((t) => t.id === id);
         let next = ts.filter((t) => t.id !== id);
-        if (!next.length) next = [makeTab(defaultProvider())];
+        if (!next.length) next = [makeTab(defaultProvider(), 1)];
         if (activeIdRef.current === id) {
           const fallback = next[Math.max(0, idx - 1)] || next[0];
           setActiveId(fallback.id);
@@ -336,11 +338,11 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
                 key={t.id}
                 className={`ai-tab ${t.id === active.id ? 'on' : ''}`}
                 onClick={() => selectTab(t.id)}
-                title={t.title || 'New chat'}
+                title={`Chat #${t.num}`}
               >
                 {t.running && <span className="ai-tab-dot running" />}
                 {!t.running && t.unread && <span className="ai-tab-dot done" />}
-                <span className="ai-tab-label">{t.title || 'New chat'}</span>
+                <span className="ai-tab-label">Chat #{t.num}</span>
                 {tabs.length > 1 && (
                   <button
                     className="ai-tab-x"
