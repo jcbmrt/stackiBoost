@@ -3220,3 +3220,25 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   flex-shrink: 0;
 }
 .code-window-footer .dim { color: var(--text-faint); font-size: 11px; }
+
+.width-readout { display: flex; align-items: center; margin-left: 6px; }
+.width-readout button {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.width-readout button:hover { background: var(--bg-hover); color: var(--text); }
+.width-readout input {
+  width: 64px;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 3px 8px;
+  outline: none;
+}

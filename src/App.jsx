@@ -1235,26 +1235,6 @@ export default function App() {
   const cmsOpenRef = useRef(false);
   cmsOpenRef.current = leftTab === 'cms' && !!cmsRel;
 
-  // 1-4 jump between breakpoints
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-      const t = e.target;
-      if (
-        t instanceof HTMLElement &&
-        (t.closest('input, textarea, select, [contenteditable="true"]') || t.isContentEditable)
-      ) {
-        return;
-      }
-      const d = { 1: 'desktop', 2: 'tablet', 3: 'phone', 4: 'canvas' }[e.key];
-      if (d) {
-        e.preventDefault();
-        setDevice(d);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
 
   // Keyboard: ⌘Z undoes, ⇧⌘Z / ⌘Y redoes (app-wide, even inside fields —
   // field edits live in the same history); Delete/Backspace removes, ⌘C

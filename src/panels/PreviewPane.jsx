@@ -189,15 +189,38 @@ export default function PreviewPane({
   const wrapRef = React.useRef(null);
   const frameRef = React.useRef(null);
   const [wrapWidth, setWrapWidth] = React.useState(null);
+  const [wrapHeight, setWrapHeight] = React.useState(null);
   React.useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const measure = () => setWrapWidth(el.clientWidth);
+    const measure = () => {
+      setWrapWidth(el.clientWidth);
+      setWrapHeight(el.clientHeight);
+    };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
+
+  // wider than the window: keep the real viewport width and scale down to fit
+  const availW = (wrapWidth ?? 0) - 24;
+  const targetW = width ?? wrapWidth ?? 0;
+  const frameScale = width && availW > 0 && width > availW ? availW / width : 1;
+  const scaleRef = React.useRef(1);
+  scaleRef.current = frameScale;
+
+  // the px readout next to the device buttons, click to type a width
+  const [editingW, setEditingW] = React.useState(false);
+  const [wDraft, setWDraft] = React.useState('');
+  const commitWidth = () => {
+    const v = parseInt(wDraft, 10);
+    if (v) {
+      setCustomW(clamp(v, 280, 3840));
+      setDevice('custom');
+    }
+    setEditingW(false);
+  };
 
   const selectDevice = (key) => setDevice(key);
 
@@ -259,9 +282,9 @@ export default function PreviewPane({
         const h = Math.round(startH + (ev.clientY - startY));
         setCustomH(clamp(h, 160, Math.max(160, wrap.clientHeight - 32)));
       } else {
-        const dx = ev.clientX - startX;
+        const dx = (ev.clientX - startX) / scaleRef.current;
         const w = Math.round(startW + (edge === 'e' ? 2 : -2) * dx);
-        setCustomW(clamp(w, 280, Math.max(280, wrap.clientWidth - 24)));
+        setCustomW(clamp(w, 280, 3840));
         setDevice('custom');
       }
     };
@@ -331,6 +354,32 @@ export default function PreviewPane({
             </button>
           ))}
         </div>
+        {device !== 'canvas' && (
+          <div className="width-readout" title="Viewport width. Click to type one.">
+            {editingW ? (
+              <input
+                autoFocus
+                value={wDraft}
+                onChange={(e) => setWDraft(e.target.value.replace(/[^0-9]/g, ''))}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') commitWidth();
+                  if (e.key === 'Escape') setEditingW(false);
+                }}
+                onBlur={commitWidth}
+              />
+            ) : (
+              <button
+                onClick={() => {
+                  setWDraft(String(Math.round(targetW) || ''));
+                  setEditingW(true);
+                }}
+              >
+                {Math.round(targetW) || 0}px
+                {frameScale < 1 ? ` · ${Math.round(frameScale * 100)}%` : ''}
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="preview-frame-wrap" ref={wrapRef}>
@@ -351,8 +400,17 @@ export default function PreviewPane({
             className={`frame-sized ${width ? '' : 'full'} ${resizing ? 'resizing' : ''}`}
             style={{
               width: width ?? wrapWidth ?? '100%',
-              maxWidth: width ? 'calc(100% - 24px)' : '100%',
-              ...(customH != null ? { height: customH, bottom: 'auto' } : {}),
+              maxWidth: frameScale < 1 ? 'none' : width ? 'calc(100% - 24px)' : '100%',
+              ...(frameScale < 1
+                ? {
+                    transform: `translateX(-50%) scale(${frameScale})`,
+                    transformOrigin: 'top center',
+                    bottom: 'auto',
+                    height: Math.max(160, ((wrapHeight ?? 0) - 32) / frameScale),
+                  }
+                : customH != null
+                  ? { height: customH, bottom: 'auto' }
+                  : {}),
             }}
           >
             <div className="frame-clip">
