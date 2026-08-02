@@ -92,6 +92,7 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .app { display: flex; flex-direction: column; height: 100%; }
 
 .titlebar {
+  position: relative;
   height: 40px;
   flex-shrink: 0;
   display: flex;
@@ -111,6 +112,19 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 }
 .titlebar .spacer { flex: 1; -webkit-app-region: drag; }
 
+.url-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+}
+.url-center .script-toggle {
+  position: absolute;
+  left: 100%;
+  white-space: nowrap;
+}
 .titlebar .url-group {
   display: flex;
   align-items: center;
@@ -119,6 +133,14 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   border-radius: 8px;
   padding: 4px 32px;
   max-width: min(640px, 46vw);
+}
+/* both side slots match, so the url sits dead center of the pill */
+.titlebar .url-group .url-side {
+  width: 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 .titlebar .url-group .status-dot { flex-shrink: 0; }
 .titlebar .url-group .ghost {

@@ -2241,32 +2241,38 @@ export default function App() {
         ) : (
           <PageSwitcher pages={scan.pages} currentPage={currentPage} onSelect={selectPage} />
         )}
-        <div className="url-group">
-          <span
-            className={`status-dot ${devStatus === 'on' ? 'on' : devStatus === 'starting' ? 'starting' : 'off'}`}
-            title={`Dev server: ${devStatus}`}
-          />
-          <span className="url">
-            {liveUrl || (devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline')}
-          </span>
+        <div className="url-center">
+          <div className="url-group">
+            <span className="url-side">
+              <span
+                className={`status-dot ${devStatus === 'on' ? 'on' : devStatus === 'starting' ? 'starting' : 'off'}`}
+                title={`Dev server: ${devStatus}`}
+              />
+            </span>
+            <span className="url">
+              {liveUrl || (devStatus === 'starting' ? 'Starting Astro dev server…' : 'Preview offline')}
+            </span>
+            <span className="url-side">
+              <button
+                className="ghost"
+                title="Reload preview"
+                disabled={!liveUrl}
+                onClick={() => setRefreshKey((k) => k + 1)}
+              >
+                <RefreshIcon size={13} />
+              </button>
+            </span>
+          </div>
           <button
-            className="ghost"
-            title="Reload preview"
-            disabled={!liveUrl}
-            onClick={() => setRefreshKey((k) => k + 1)}
+            className={`script-toggle ${scriptsOn ? 'on' : ''}`}
+            title={scriptsOn ? 'Scripts run in the preview. Click to show HTML + CSS only.' : 'Scripts are off in the preview. Click to run them.'}
+            onClick={() => setScriptsOn((v) => !v)}
           >
-            <RefreshIcon size={13} />
+            <CodeSlashIcon size={13} />
+            <span className="switch" />
+            <span className="script-toggle-label">Enable scripts?</span>
           </button>
         </div>
-        <button
-          className={`script-toggle ${scriptsOn ? 'on' : ''}`}
-          title={scriptsOn ? 'Scripts run in the preview. Click to show HTML + CSS only.' : 'Scripts are off in the preview. Click to run them.'}
-          onClick={() => setScriptsOn((v) => !v)}
-        >
-          <CodeSlashIcon size={13} />
-          <span className="switch" />
-          <span className="script-toggle-label">Enable scripts?</span>
-        </button>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}
         <div className="titlebar-actions">
