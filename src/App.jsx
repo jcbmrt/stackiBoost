@@ -2264,8 +2264,8 @@ export default function App() {
           onClick={() => setScriptsOn((v) => !v)}
         >
           <CodeSlashIcon size={13} />
-          <span className="script-toggle-label">Enable scripts?</span>
           <span className="switch" />
+          <span className="script-toggle-label">Enable scripts?</span>
         </button>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}
