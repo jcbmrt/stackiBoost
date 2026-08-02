@@ -2247,8 +2247,16 @@ ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   try {
     const prev = fs.readFileSync(abs, 'utf8');
     if (prev !== css) {
-      styleUndoStack.push({ abs, prev });
-      if (styleUndoStack.length > 100) styleUndoStack.shift();
+      const top = styleUndoStack[styleUndoStack.length - 1];
+      // rapid writes to the same file (slider scrubs, quick clicks) collapse
+      // into one undo step keeping the oldest snapshot, so one cmd+z reverts
+      // the whole gesture instead of a single tick
+      if (top && top.abs === abs && Date.now() - top.at < 1200) {
+        top.at = Date.now();
+      } else {
+        styleUndoStack.push({ abs, prev, at: Date.now() });
+        if (styleUndoStack.length > 100) styleUndoStack.shift();
+      }
     }
   } catch {
     /* new file */
@@ -2264,7 +2272,7 @@ ipcMain.handle('style:undo', async () => {
   if (!top) return { ok: false };
   markSelfWrite(top.abs);
   fs.writeFileSync(top.abs, top.prev, 'utf8');
-  send('style:written', { filePath: top.abs });
+  send('style:written', { filePath: top.abs, undo: true });
   return { ok: true };
 });
 

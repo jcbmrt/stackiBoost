@@ -1246,7 +1246,7 @@ export default function App() {
   // Style-panel css writes: hot-swap stylesheets in every preview frame so
   // edits show up live, and remember them for cmd+z.
   useEffect(() => {
-    const off = window.avb.onStyleWritten(() => {
+    const off = window.avb.onStyleWritten(({ undo: isUndo } = {}) => {
       lastEditKindRef.current = 'style';
       for (const f of document.querySelectorAll('iframe')) {
         try {
@@ -1255,6 +1255,8 @@ export default function App() {
           /* frame mid-load */
         }
       }
+      // an undo changed the css behind the style panel's back; make it re-read
+      if (isUndo) window.dispatchEvent(new CustomEvent('avb:style-external'));
     });
     return off;
   }, []);

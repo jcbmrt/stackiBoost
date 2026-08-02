@@ -26,6 +26,13 @@ export default function StylePanel({
   onSelectNode,
 }) {
   const [files, setFiles] = useState([]);
+  // bumped when css changed outside the panel (style undo) so it re-reads
+  const [externalTick, setExternalTick] = useState(0);
+  useEffect(() => {
+    const on = () => setExternalTick((t) => t + 1);
+    window.addEventListener('avb:style-external', on);
+    return () => window.removeEventListener('avb:style-external', on);
+  }, []);
 
   useEffect(() => {
     let live = true;
@@ -98,7 +105,7 @@ export default function StylePanel({
       {!node ? (
         <div className="props-empty">Select an element to style it.</div>
       ) : (
-        <EmbedEditor />
+        <EmbedEditor key={externalTick} />
       )}
     </div>
   );
