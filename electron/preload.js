@@ -447,7 +447,8 @@ if (!process.isMainFrame) {
         e.preventDefault();
         e.stopPropagation();
         const p = pathContaining(e.target);
-        if (p) window.parent.postMessage({ type: 'avb:open-node', path: p }, '*');
+        // no path = layout chrome; the app opens the layout for editing
+        window.parent.postMessage({ type: 'avb:open-node', path: p || null }, '*');
       },
       true
     );

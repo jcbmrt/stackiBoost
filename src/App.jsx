@@ -2455,7 +2455,12 @@ export default function App() {
               }
             }}
             onOpenPath={(p) => {
-              // Double-clicking a component on the canvas drills into it.
+              // Double-clicking a component on the canvas drills into it;
+              // layout chrome (no path) opens the layout itself.
+              if (!p) {
+                if (currentLayoutName) openComponent(currentLayoutName, null);
+                return;
+              }
               const n = model && nodeAtPath(model.nodes, p.split('.').map(Number));
               if (n?.kind === 'component') openComponent(n.name, p);
             }}

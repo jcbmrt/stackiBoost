@@ -530,6 +530,12 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
           onSelect(node.id);
         }}
         onDoubleClick={(e) => {
+          // The layout row drills into the layout's own file.
+          if (node.id === 'layout' && onOpenComponent) {
+            e.stopPropagation();
+            onOpenComponent(currentLayoutName || node.name, null);
+            return;
+          }
           // Code-bearing nodes open the floating editor, like Edit code does.
           if (node.kind === 'raw' && onOpenCode) {
             e.stopPropagation();

@@ -145,7 +145,7 @@ export default function PreviewPane({
         lastClickRef.current = { path: d.path || null, occ: d.occurrence || 0 };
         setSelOcc(d.occurrence || 0);
         onSelectPath(d.path || null);
-      } else if (d?.type === 'avb:open-node' && d.path && onOpenPath) {
+      } else if (d?.type === 'avb:open-node' && onOpenPath) {
         onOpenPath(d.path);
       }
     };
