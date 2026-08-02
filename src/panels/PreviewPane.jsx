@@ -68,6 +68,7 @@ export default function PreviewPane({
   onDevice,
   canvasBp,
   onCanvasBp,
+  onDeselect,
 }) {
   // The breakpoint lives in App so a re-mount of this pane can't silently
   // kick the user out of a view (which would reload every preview iframe).
@@ -342,6 +343,7 @@ export default function PreviewPane({
             onOpenPath={onOpenPath}
             activeKey={canvasBp}
             onActivate={onCanvasBp}
+            onDeselect={onDeselect}
           />
         ) : url ? (
           <div

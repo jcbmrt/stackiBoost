@@ -22,13 +22,14 @@ const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 4;
 const clamp = (v, min, max) => Math.min(Math.max(v, min), max);
 
-export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onOpenPath, activeKey, onActivate }) {
+export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onOpenPath, activeKey, onActivate, onDeselect }) {
   const wrapRef = React.useRef(null);
   const iframeRefs = React.useRef({}); // key -> iframe element
   const [view, setView] = React.useState(null); // {x, y, s}
   const [panning, setPanning] = React.useState(false);
   const [heights, setHeights] = React.useState({}); // key -> page height
   const [rects, setRects] = React.useState({}); // key -> {path: rect}
+  const rectsJsonRef = React.useRef({}); // key -> last payload, skips no-op updates
   const [hovers, setHovers] = React.useState({}); // key -> path
   const hoversRef = React.useRef({});
   hoversRef.current = hovers;
@@ -51,7 +52,7 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
 
   React.useEffect(() => {
     for (const key of Object.keys(iframeRefs.current)) track(key);
-  }, [selPath, hovers]);
+  }, [selPath]);
 
   // clicks, hovers and rects coming back from the frames
   React.useEffect(() => {
@@ -67,8 +68,15 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
         onActivate && onActivate(key);
         onOpenPath && onOpenPath(d.path);
       } else if (d.type === 'avb:hover-node') {
-        setHovers((h) => (h[key] === d.path ? h : { ...h, [key]: d.path }));
+        if (hoversRef.current[key] !== d.path) {
+          hoversRef.current[key] = d.path;
+          setHovers((h) => ({ ...h, [key]: d.path }));
+          track(key);
+        }
       } else if (d.type === 'avb:rects') {
+        const json = JSON.stringify(d.rects || {});
+        if (rectsJsonRef.current[key] === json) return;
+        rectsJsonRef.current[key] = json;
         setRects((r) => ({ ...r, [key]: d.rects || {} }));
       } else if (d.type === 'avb:wheel') {
         const el = iframeRefs.current[key];
@@ -187,14 +195,29 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
     const v0 = viewRef.current;
     if (!v0) return;
     e.preventDefault();
-    userMovedRef.current = true;
     setPanning(true);
     const sx = e.clientX;
     const sy = e.clientY;
-    const onMove = (ev) =>
-      setView({ ...v0, x: v0.x + ev.clientX - sx, y: v0.y + ev.clientY - sy });
+    let moved = false;
+    let raf = null;
+    let last = { x: sx, y: sy };
+    const onMove = (ev) => {
+      last = { x: ev.clientX, y: ev.clientY };
+      if (Math.abs(last.x - sx) + Math.abs(last.y - sy) > 3) {
+        moved = true;
+        userMovedRef.current = true;
+      }
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = null;
+        if (moved) setView({ ...v0, x: v0.x + last.x - sx, y: v0.y + last.y - sy });
+      });
+    };
     const onUp = () => {
       setPanning(false);
+      if (raf) cancelAnimationFrame(raf);
+      // a still click on the empty canvas clears the selection, like figma
+      if (!moved && onDeselect) onDeselect();
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
     };

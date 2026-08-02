@@ -907,6 +907,22 @@ export default function App() {
     [mutateModel, showToast]
   );
 
+  // swap the node with its previous or next sibling (cmd+[ / cmd+])
+  const moveSibling = useCallback(
+    (nodeId, delta) => {
+      mutateModel((model) => {
+        const found = findParentList(model, nodeId);
+        if (!found) return model;
+        const to = found.index + delta;
+        if (to < 0 || to >= found.list.length) return model;
+        const [node] = found.list.splice(found.index, 1);
+        found.list.splice(to, 0, node);
+        return model;
+      }, true);
+    },
+    [mutateModel]
+  );
+
   const removeNode = useCallback(
     (nodeId) => {
       const state = pageStateRef.current.pageState;
@@ -1219,6 +1235,27 @@ export default function App() {
   const cmsOpenRef = useRef(false);
   cmsOpenRef.current = leftTab === 'cms' && !!cmsRel;
 
+  // 1-4 jump between breakpoints
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.closest('input, textarea, select, [contenteditable="true"]') || t.isContentEditable)
+      ) {
+        return;
+      }
+      const d = { 1: 'desktop', 2: 'tablet', 3: 'phone', 4: 'canvas' }[e.key];
+      if (d) {
+        e.preventDefault();
+        setDevice(d);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   // Keyboard: ⌘Z undoes, ⇧⌘Z / ⌘Y redoes (app-wide, even inside fields —
   // field edits live in the same history); Delete/Backspace removes, ⌘C
   // copies, ⌘D duplicates, ⌘V pastes — unless the user is typing in a field.
@@ -1309,11 +1346,15 @@ export default function App() {
         if (!nodeClipboardRef.current) return;
         e.preventDefault();
         pasteNode();
+      } else if (mod && (e.key === '[' || e.key === ']')) {
+        if (!hasNodeSel) return;
+        e.preventDefault();
+        moveSibling(selId, e.key === '[' ? -1 : 1);
       }
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo]);
+  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo, moveSibling]);
 
   // Application-menu shortcuts: on macOS the native menu consumes ⌘Z/⌘C/⌘V
   // before the DOM sees them, so those arrive here via IPC instead. Copy and
@@ -2356,6 +2397,7 @@ export default function App() {
             onDevice={setDevice}
             canvasBp={canvasBp}
             onCanvasBp={setCanvasBp}
+            onDeselect={() => setSelectedId(null)}
             onSelectPath={(p) => {
               // Editing a component: the canvas still shows the whole page, so
               // a click in the dimmed area (or on nothing) means "I'm done in
