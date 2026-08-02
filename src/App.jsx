@@ -26,6 +26,7 @@ import {
   ExternalIcon,
   ChevronLeftIcon,
   ElementComponentIcon,
+  CodeSlashIcon,
 } from './ui/Icons.jsx';
 
 let idCounter = 1000;
@@ -2257,6 +2258,14 @@ export default function App() {
             <RefreshIcon size={13} />
           </button>
         </div>
+        <button
+          className={`script-toggle ${scriptsOn ? 'on' : ''}`}
+          title={scriptsOn ? 'Scripts run in the preview. Click to show HTML + CSS only.' : 'Scripts are off in the preview. Click to run them.'}
+          onClick={() => setScriptsOn((v) => !v)}
+        >
+          <CodeSlashIcon size={13} />
+          <span className="switch" />
+        </button>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}
         <div className="titlebar-actions">
@@ -2406,7 +2415,6 @@ export default function App() {
             onCanvasBp={setCanvasBp}
             onDeselect={() => setSelectedId(null)}
             scriptsOn={scriptsOn}
-            onScriptsOn={setScriptsOn}
             onSelectPath={(p) => {
               // Editing a component: the canvas still shows the whole page, so
               // a click in the dimmed area (or on nothing) means "I'm done in
