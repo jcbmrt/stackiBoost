@@ -2238,10 +2238,33 @@ ipcMain.handle('style:readFile', async (_e, filePath) => {
   return { css: fs.readFileSync(abs, 'utf8') };
 });
 
+// undo stack for css file edits: the style panel writes whole files, so a
+// snapshot of the previous content per write is enough
+const styleUndoStack = [];
+
 ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   const abs = assertInProject(filePath);
+  try {
+    const prev = fs.readFileSync(abs, 'utf8');
+    if (prev !== css) {
+      styleUndoStack.push({ abs, prev });
+      if (styleUndoStack.length > 100) styleUndoStack.shift();
+    }
+  } catch {
+    /* new file */
+  }
   markSelfWrite(abs); // the watcher must not treat our own write as external
   fs.writeFileSync(abs, css, 'utf8');
+  send('style:written', { filePath: abs });
+  return { ok: true };
+});
+
+ipcMain.handle('style:undo', async () => {
+  const top = styleUndoStack.pop();
+  if (!top) return { ok: false };
+  markSelfWrite(top.abs);
+  fs.writeFileSync(top.abs, top.prev, 'utf8');
+  send('style:written', { filePath: top.abs });
   return { ok: true };
 });
 

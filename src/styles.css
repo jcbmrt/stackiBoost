@@ -124,6 +124,7 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   position: absolute;
   left: 100%;
   white-space: nowrap;
+  -webkit-app-region: no-drag;
 }
 .url-center .url-left {
   position: absolute;
@@ -132,6 +133,7 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
   white-space: nowrap;
   display: flex;
   align-items: center;
+  -webkit-app-region: no-drag;
 }
 .titlebar .url-group {
   display: flex;

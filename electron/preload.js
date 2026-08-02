@@ -489,6 +489,21 @@ if (!process.isMainFrame) {
     if (d?.type === 'avb:scroll-to' && typeof d.path === 'string') {
       scrollPathIntoView(d.path);
     }
+    if (d?.type === 'avb:css-reload') {
+      for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+        try {
+          const u = new URL(link.href);
+          if (u.origin !== location.origin) continue;
+          u.searchParams.set('avb', Date.now().toString(36));
+          const clone = link.cloneNode();
+          clone.href = u.pathname + u.search;
+          clone.onload = () => link.remove();
+          link.parentNode.insertBefore(clone, link.nextSibling);
+        } catch {
+          /* leave that link alone */
+        }
+      }
+    }
     if (d?.type === 'avb:set-vh' && typeof d.px === 'number') {
       document.documentElement.style.setProperty('--avb-vh', d.px / 100 + 'px');
       if (!frozen) {
@@ -614,6 +629,12 @@ contextBridge.exposeInMainWorld('avb', {
   listStyleFiles: invoke('style:listFiles'),
   readStyleFile: invoke('style:readFile'),
   writeStyleFile: invoke('style:writeFile'),
+  styleUndo: invoke('style:undo'),
+  onStyleWritten: (cb) => {
+    const listener = (_e, data) => cb(data);
+    ipcRenderer.on('style:written', listener);
+    return () => ipcRenderer.removeListener('style:written', listener);
+  },
 
   // Git
   gitInfo: invoke('git:info'),

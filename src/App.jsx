@@ -389,6 +389,8 @@ export default function App() {
   const [assetPick, setAssetPick] = useState(null);
   const tabBeforePick = useRef(null);
   const [aiOpen, setAiOpen] = useState(false);
+  // was the last edit a model change or a style-panel css write? cmd+z follows it
+  const lastEditKindRef = useRef('model');
   const [codeMode, setCodeMode] = useState(false);
   const codeModeRef = useRef(false);
   codeModeRef.current = codeMode;
@@ -759,6 +761,7 @@ export default function App() {
 
   const mutateModel = useCallback(
     (fn, immediate = false, coalesceKey = null) => {
+      lastEditKindRef.current = 'model';
       pushHistory(coalesceKey);
       setPageState((s) => {
         if (!s || !s.editable) return s;
@@ -1240,6 +1243,31 @@ export default function App() {
     [insertTargetFor, addComponent, mutateModel]
   );
 
+  // Style-panel css writes: hot-swap stylesheets in every preview frame so
+  // edits show up live, and remember them for cmd+z.
+  useEffect(() => {
+    const off = window.avb.onStyleWritten(() => {
+      lastEditKindRef.current = 'style';
+      for (const f of document.querySelectorAll('iframe')) {
+        try {
+          f.contentWindow?.postMessage({ type: 'avb:css-reload' }, '*');
+        } catch {
+          /* frame mid-load */
+        }
+      }
+    });
+    return off;
+  }, []);
+
+  const undoSmart = useCallback(async () => {
+    if (lastEditKindRef.current === 'style') {
+      const { ok } = await window.avb.styleUndo();
+      if (ok) return;
+      lastEditKindRef.current = 'model';
+    }
+    undo();
+  }, [undo]);
+
   // True while the CMS covers the canvas: the page-editing shortcuts below
   // would act on a selection the user can't see.
   const cmsOpenRef = useRef(false);
@@ -1260,7 +1288,7 @@ export default function App() {
         if (!pageStateRef.current.pageState) return;
         e.preventDefault();
         if (e.key.toLowerCase() === 'y' || e.shiftKey) redo();
-        else undo();
+        else undoSmart();
         return;
       }
 
@@ -1344,7 +1372,7 @@ export default function App() {
     };
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
-  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, redo, moveSibling]);
+  }, [removeNode, copyNode, duplicateNode, pasteNode, undo, undoSmart, redo, moveSibling]);
 
   // Application-menu shortcuts: on macOS the native menu consumes ⌘Z/⌘C/⌘V
   // before the DOM sees them, so those arrive here via IPC instead. Copy and
@@ -1361,7 +1389,7 @@ export default function App() {
     const offs = [
       window.avb.onMenu('undo', () => {
         if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-undo'));
-        if (pageStateRef.current.pageState && !cmsOpenRef.current) undo();
+        if (pageStateRef.current.pageState && !cmsOpenRef.current) undoSmart();
       }),
       window.avb.onMenu('redo', () => {
         if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-redo'));
@@ -1388,7 +1416,7 @@ export default function App() {
       }),
     ];
     return () => offs.forEach((off) => off());
-  }, [undo, redo, copyNode, pasteNode]);
+  }, [undo, undoSmart, redo, copyNode, pasteNode]);
 
   // ----------------------------------------------------------------
   // Interactive preview mode — browse the site inside the app; on exit,
