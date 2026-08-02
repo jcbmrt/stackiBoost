@@ -2226,21 +2226,23 @@ export default function App() {
     <div className="app">
       <div className="titlebar">
         <span className="app-title">{project.name}</span>
-        {editStack.length > 1 ? (
-          <button
-            className="page-switch-btn comp-back"
-            title="Back (Esc)"
-            onClick={closeComponent}
-          >
-            <ChevronLeftIcon size={13} />
-            <span className="comp-back-sep" />
-            <ElementComponentIcon size={13} />
-            <span className="page-switch-label">{currentPage?.name}</span>
-          </button>
-        ) : (
-          <PageSwitcher pages={scan.pages} currentPage={currentPage} onSelect={selectPage} />
-        )}
         <div className="url-center">
+          <span className="url-left">
+            {editStack.length > 1 ? (
+              <button
+                className="page-switch-btn comp-back"
+                title="Back (Esc)"
+                onClick={closeComponent}
+              >
+                <ChevronLeftIcon size={13} />
+                <span className="comp-back-sep" />
+                <ElementComponentIcon size={13} />
+                <span className="page-switch-label">{currentPage?.name}</span>
+              </button>
+            ) : (
+              <PageSwitcher pages={scan.pages} currentPage={currentPage} onSelect={selectPage} />
+            )}
+          </span>
           <div className="url-group">
             <span className="url-side">
               <span
