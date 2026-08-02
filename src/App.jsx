@@ -2282,15 +2282,29 @@ export default function App() {
 
       <div className="main">
         <LeftRail
-          active={leftTab}
-          onSelect={(id) => setLeftTab((t) => (t === id ? null : id))}
+          active={codeMode ? null : leftTab}
+          onSelect={(id) => {
+            // a designer tab exits code mode and returns to the canvas
+            if (id !== 'settings' && codeModeRef.current) {
+              setCodeMode(false);
+              setLeftTab(id);
+              return;
+            }
+            setLeftTab((t) => (t === id ? null : id));
+          }}
           aiOpen={aiOpen}
           onToggleAi={() => setAiOpen((v) => !v)}
           codeOn={codeMode}
-          onToggleCode={() => setCodeMode((v) => !v)}
+          onToggleCode={() =>
+            setCodeMode((v) => {
+              const next = !v;
+              if (next) setLeftTab(null); // the tree replaces the navigator
+              return next;
+            })
+          }
         />
 
-        {leftTab && (
+        {leftTab && !(codeMode && leftTab !== 'settings') && (
           <div className="panel left">
             {leftTab === 'pages' && (
               <PagesPanel
