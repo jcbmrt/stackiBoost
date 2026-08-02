@@ -2226,7 +2226,6 @@ export default function App() {
     <div className="app">
       <div className="titlebar">
         <span className="app-title">{project.name}</span>
-        <span className="spacer" />
         {editStack.length > 1 ? (
           <button
             className="page-switch-btn comp-back"
