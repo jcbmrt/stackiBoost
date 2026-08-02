@@ -64,9 +64,9 @@ export default function CanvasView({ url, refreshKey, scriptsOn, selPath, onSele
       if (d.type === 'avb:click-node') {
         onActivate && onActivate(key);
         onSelectPath && onSelectPath(d.path || null);
-      } else if (d.type === 'avb:open-node' && d.path) {
+      } else if (d.type === 'avb:open-node') {
         onActivate && onActivate(key);
-        onOpenPath && onOpenPath(d.path);
+        onOpenPath && onOpenPath(d.path || null);
       } else if (d.type === 'avb:hover-node') {
         if (hoversRef.current[key] !== d.path) {
           hoversRef.current[key] = d.path;
