@@ -15,6 +15,7 @@ import AssetsPanel from './panels/AssetsPanel.jsx';
 import CmsPanel from './panels/CmsPanel.jsx';
 import CmsView from './panels/CmsView.jsx';
 import AiPanel from './panels/AiPanel.jsx';
+import CodePanel from './panels/CodePanel.jsx';
 import SettingsPanel from './panels/SettingsPanel.jsx';
 import { getElementSchema, GLOBAL_ATTRS, canContainTag } from './elementSchemas.js';
 import { onAssetRequest, clearAssetRequest } from './assetPick.js';
@@ -382,6 +383,9 @@ export default function App() {
   const [assetPick, setAssetPick] = useState(null);
   const tabBeforePick = useRef(null);
   const [aiOpen, setAiOpen] = useState(false);
+  const [codeMode, setCodeMode] = useState(false);
+  const codeModeRef = useRef(false);
+  codeModeRef.current = codeMode;
 
   // A layout is just a component that lives in src/layouts — it can be
   // placed on a page like any other. Every lookup that answers "what do we
@@ -1241,7 +1245,7 @@ export default function App() {
   // copies, ⌘D duplicates, ⌘V pastes — unless the user is typing in a field.
   useEffect(() => {
     const onKeyDown = (e) => {
-      if (cmsOpenRef.current) return;
+      if (cmsOpenRef.current || codeModeRef.current) return;
       const mod = e.metaKey || e.ctrlKey;
 
       // Undo/redo take priority over native field undo so history stays
@@ -1350,9 +1354,11 @@ export default function App() {
     };
     const offs = [
       window.avb.onMenu('undo', () => {
+        if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-undo'));
         if (pageStateRef.current.pageState && !cmsOpenRef.current) undo();
       }),
       window.avb.onMenu('redo', () => {
+        if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-redo'));
         if (pageStateRef.current.pageState && !cmsOpenRef.current) redo();
       }),
       window.avb.onMenu('copy', () => {
@@ -2280,6 +2286,8 @@ export default function App() {
           onSelect={(id) => setLeftTab((t) => (t === id ? null : id))}
           aiOpen={aiOpen}
           onToggleAi={() => setAiOpen((v) => !v)}
+          codeOn={codeMode}
+          onToggleCode={() => setCodeMode((v) => !v)}
         />
 
         {leftTab && (
@@ -2416,6 +2424,20 @@ export default function App() {
               if (n?.kind === 'component') openComponent(n.name, p);
             }}
           />
+
+          {/* Code mode covers the canvas; the preview stays mounted and the
+              watcher keeps the page model fresh, so leaving is instant. */}
+          {codeMode && (
+            <CodePanel
+              project={project}
+              initialRel={
+                currentPage?.path?.startsWith(project.path)
+                  ? currentPage.path.slice(project.path.length).replace(/^\//, '')
+                  : null
+              }
+              showToast={showToast}
+            />
+          )}
 
           {/* The CMS edits content, not layout — it covers the canvas rather
               than replacing it, so the preview keeps its loaded page. */}

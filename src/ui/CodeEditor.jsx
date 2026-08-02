@@ -3,6 +3,7 @@ import { EditorView, basicSetup } from 'codemirror';
 import { EditorState } from '@codemirror/state';
 import { css } from '@codemirror/lang-css';
 import { javascript } from '@codemirror/lang-javascript';
+import { html } from '@codemirror/lang-html';
 import { syntaxHighlighting, HighlightStyle } from '@codemirror/language';
 import { tags as t } from '@lezer/highlight';
 
@@ -69,14 +70,21 @@ export const appHighlight = syntaxHighlighting(
   )
 );
 
-export default function CodeEditor({ value, language, onChange }) {
+export default function CodeEditor({ value, language, onChange, onView }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   useEffect(() => {
-    const lang = language === 'css' ? css() : javascript({ typescript: true });
+    const lang =
+      language === 'css'
+        ? css()
+        : language === 'html'
+          ? html()
+          : language === 'plain'
+            ? []
+            : javascript({ typescript: true });
     const view = new EditorView({
       parent: hostRef.current,
       state: EditorState.create({
@@ -93,6 +101,7 @@ export default function CodeEditor({ value, language, onChange }) {
       }),
     });
     viewRef.current = view;
+    onView?.(view);
     return () => {
       view.destroy();
       viewRef.current = null;

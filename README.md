@@ -24,6 +24,8 @@ To use it, install at least one of the CLIs above, log in once from a terminal, 
 
 - **Framer-style canvas selection.** In canvas view (all breakpoints side by side) you can hover and click elements right in the frames. Clicking a frame also targets its breakpoint, so the Style panel and the AI both edit that breakpoint.
 - **Double-click opens code.** Double-clicking Frontmatter or a style/script node in the Navigator opens the floating code editor.
+- **Code mode.** The code button on the left rail swaps the canvas for a full project editor: file tree, syntax highlighting for Astro, CSS, and JS, auto-save with hot reload. Exit and the canvas shows your changes.
+- **Viewport width control.** A px readout next to the breakpoints; type any width (up to 3840) and wider-than-window viewports scale to fit, DevTools style.
 
 ## Features
 

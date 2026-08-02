@@ -6,6 +6,7 @@ import {
   AssetManagerIcon,
   CmsIcon,
   SparkleIcon,
+  EmbedCodeIcon,
   GearIcon,
 } from './Icons.jsx';
 
@@ -19,6 +20,7 @@ const TABS = [
 
 const BOTTOM = [
   { id: 'ai', title: 'AI', shortcut: '⌘J', Icon: SparkleIcon },
+  { id: 'code', title: 'Code', shortcut: '', Icon: EmbedCodeIcon },
   { id: 'settings', title: 'Settings', shortcut: '', Icon: GearIcon },
 ];
 
@@ -26,7 +28,7 @@ const TOOLTIP_DELAY = 500;
 
 // Webflow-style icon rail. Clicking the active tab collapses the panel.
 // Hovering a button for a moment shows a tooltip with its keyboard shortcut.
-export default function LeftRail({ active, onSelect, aiOpen, onToggleAi }) {
+export default function LeftRail({ active, onSelect, aiOpen, onToggleAi, codeOn, onToggleCode }) {
   const [tip, setTip] = useState(null); // {id, left, top}
   const timerRef = useRef(null);
 
@@ -102,7 +104,8 @@ export default function LeftRail({ active, onSelect, aiOpen, onToggleAi }) {
       {TABS.map((t) => railBtn(t, active === t.id, () => onSelect(t.id)))}
       <span className="rail-spacer" />
       {railBtn(BOTTOM[0], aiOpen, onToggleAi)}
-      {railBtn(BOTTOM[1], active === 'settings', () => onSelect('settings'))}
+      {railBtn(BOTTOM[1], codeOn, onToggleCode)}
+      {railBtn(BOTTOM[2], active === 'settings', () => onSelect('settings'))}
       {tipTab && (
         <div className="rail-tooltip" style={{ left: tip.left, top: tip.top }}>
           {tipTab.title}

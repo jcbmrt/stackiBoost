@@ -2492,5 +2492,64 @@ ipcMain.handle('shell:openExternal', async (_e, url) => {
   return { ok: true };
 });
 
+// code mode: project source files
+const CODE_EXT = /\.(astro|css|scss|js|mjs|cjs|ts|jsx|tsx|json|md|mdx|html|svg|txt|xml)$/i;
+const CODE_SKIP = new Set(['node_modules', '.git', 'dist', '.astro', '.vercel', '.netlify', 'release']);
+
+function codeAbs(projectPath, rel) {
+  const root = path.resolve(projectPath);
+  const abs = path.resolve(root, rel || '');
+  if (abs !== root && !abs.startsWith(root + path.sep)) throw new Error('Invalid path');
+  return abs;
+}
+
+ipcMain.handle('code:list', async (_e, projectPath) => {
+  const root = path.resolve(projectPath);
+  const files = [];
+  const walk = (dir, rel) => {
+    let names;
+    try {
+      names = fs.readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const name of names.sort()) {
+      if (name.startsWith('.') || CODE_SKIP.has(name)) continue;
+      const abs = path.join(dir, name);
+      const r = rel ? rel + '/' + name : name;
+      let st;
+      try {
+        st = fs.statSync(abs);
+      } catch {
+        continue;
+      }
+      if (st.isDirectory()) walk(abs, r);
+      else if (CODE_EXT.test(name) && st.size < 2 * 1024 * 1024) files.push(r);
+    }
+  };
+  for (const top of ['src', 'public']) {
+    const d = path.join(root, top);
+    if (fs.existsSync(d)) walk(d, top);
+  }
+  try {
+    for (const name of fs.readdirSync(root)) {
+      const abs = path.join(root, name);
+      if (fs.statSync(abs).isFile() && CODE_EXT.test(name)) files.push(name);
+    }
+  } catch {
+    /* fine */
+  }
+  return { files };
+});
+
+ipcMain.handle('code:read', async (_e, { projectPath, rel }) => {
+  return { text: fs.readFileSync(codeAbs(projectPath, rel), 'utf8') };
+});
+
+ipcMain.handle('code:write', async (_e, { projectPath, rel, text }) => {
+  fs.writeFileSync(codeAbs(projectPath, rel), text, 'utf8');
+  return { ok: true };
+});
+
 // ai panel
 registerAiProviders({ ipcMain, send, ensureToolPath });

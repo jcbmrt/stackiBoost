@@ -610,6 +610,11 @@ contextBridge.exposeInMainWorld('avb', {
 
   openExternal: invoke('shell:openExternal'),
 
+  // Code mode
+  codeList: invoke('code:list'),
+  codeRead: invoke('code:read'),
+  codeWrite: invoke('code:write'),
+
   // AI panel (Claude Code)
   aiStatus: invoke('ai:status'),
   aiTest: invoke('ai:test'),
