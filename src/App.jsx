@@ -2255,6 +2255,7 @@ export default function App() {
       <div className="titlebar">
         <span className="app-title">{project.name}</span>
         <div className="url-center">
+          <div className="url-anchor">
           <span className="url-left">
             {editStack.length > 1 ? (
               <button
@@ -2301,6 +2302,7 @@ export default function App() {
             <span className="switch" />
             <span className="script-toggle-label">Enable scripts?</span>
           </button>
+          </div>
         </div>
         <span className="spacer" />
         {/* Both ways of viewing the site, kept together. */}

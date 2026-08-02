@@ -113,12 +113,21 @@ textarea { font-family: inherit; font-size: 12px; line-height: 1.5; resize: none
 .titlebar .spacer { flex: 1; -webkit-app-region: drag; }
 
 .url-center {
+  /* no transform here: a transformed ancestor would break the page menu's
+     position: fixed and clip it invisible */
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
   display: flex;
   align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.url-anchor {
+  position: relative;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
 }
 .url-center .script-toggle {
   position: absolute;
