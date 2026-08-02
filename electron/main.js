@@ -112,7 +112,8 @@ function createWindow() {
     height: 940,
     minWidth: 1024,
     minHeight: 640,
-    title: 'Stacki',
+    show: false,
+    title: 'StackiBoost',
     backgroundColor: '#111111',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     // Windows/Linux taskbar + window chrome; macOS uses the Dock icon above.
@@ -127,6 +128,9 @@ function createWindow() {
       nodeIntegrationInSubFrames: true,
     },
   });
+  // open filling the screen
+  mainWindow.maximize();
+  mainWindow.show();
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
