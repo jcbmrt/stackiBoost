@@ -1797,6 +1797,7 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
   cursor: grab;
 }
 .canvas-view.panning { cursor: grabbing; }
+.canvas-view.panning iframe { pointer-events: none; }
 .canvas-world {
   position: absolute;
   left: 0;

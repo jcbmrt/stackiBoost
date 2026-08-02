@@ -196,6 +196,14 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
     if (!v0) return;
     e.preventDefault();
     setPanning(true);
+    const el = e.currentTarget;
+    // capture so the release always lands here, even over a frame iframe —
+    // a missed pointerup left the canvas stuck in panning mode
+    try {
+      el.setPointerCapture(e.pointerId);
+    } catch {
+      /* older engines */
+    }
     const sx = e.clientX;
     const sy = e.clientY;
     let moved = false;
@@ -218,11 +226,13 @@ export default function CanvasView({ url, refreshKey, selPath, onSelectPath, onO
       if (raf) cancelAnimationFrame(raf);
       // a still click on the empty canvas clears the selection, like figma
       if (!moved && onDeselect) onDeselect();
-      window.removeEventListener('pointermove', onMove);
-      window.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointermove', onMove);
+      el.removeEventListener('pointerup', onUp);
+      el.removeEventListener('pointercancel', onUp);
     };
-    window.addEventListener('pointermove', onMove);
-    window.addEventListener('pointerup', onUp);
+    el.addEventListener('pointermove', onMove);
+    el.addEventListener('pointerup', onUp);
+    el.addEventListener('pointercancel', onUp);
   };
 
   // Zoom buttons zoom around the viewport center.
