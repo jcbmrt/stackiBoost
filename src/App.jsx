@@ -2264,6 +2264,7 @@ export default function App() {
           onClick={() => setScriptsOn((v) => !v)}
         >
           <CodeSlashIcon size={13} />
+          <span className="script-toggle-label">Enable scripts?</span>
           <span className="switch" />
         </button>
         <span className="spacer" />
