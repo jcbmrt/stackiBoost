@@ -10,26 +10,52 @@ const SYSTEM_PROMPT = [
   'The Astro dev server is already running. Never start dev servers, never commit to git unless asked.',
 ].join(' ');
 
-export default function AiPanel({ project, context, onClose, showToast }) {
-  const [messages, setMessages] = useState([]);
-  const [live, setLive] = useState('');
-  const [input, setInput] = useState('');
-  const [running, setRunning] = useState(false);
+const MAX_TABS = 5;
+let tabSeq = 1;
+const makeTab = (provider) => ({
+  id: `t${Date.now().toString(36)}-${tabSeq++}`,
+  title: null,
+  messages: [],
+  live: '',
+  input: '',
+  running: false,
+  stopping: false,
+  unread: false,
+  sessions: {},
+  provider,
+});
+
+export default function AiPanel({ project, context, hidden, onClose, onFinished, showToast }) {
+  const defaultProvider = () => localStorage.getItem('ai-provider') || 'claude';
+  const [tabs, setTabs] = useState(() => [makeTab(defaultProvider())]);
+  const [activeId, setActiveId] = useState(() => null);
   const [providers, setProviders] = useState(null);
   const [added, setAdded] = useState(() => getAiModels() || []);
-  const [provider, setProvider] = useState(() => localStorage.getItem('ai-provider') || 'claude');
   const [height, setHeight] = useState(300);
-  const [pinned, setPinned] = useState(false); // user sized the panel by hand
-  const [autoH, setAutoH] = useState(52); // grows with content up to ~5 lines
-  const [inputH, setInputH] = useState(null); // manual override from the grip
-  const sessionsRef = useRef({});
-  const providerRef = useRef(provider);
-  providerRef.current = provider;
-  const liveRef = useRef('');
+  const [pinned, setPinned] = useState(false);
+  const [autoH, setAutoH] = useState(52);
+  const [inputH, setInputH] = useState(null);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
   const contextRef = useRef(context);
   contextRef.current = context;
+  const hiddenRef = useRef(hidden);
+  hiddenRef.current = hidden;
+  const onFinishedRef = useRef(onFinished);
+  onFinishedRef.current = onFinished;
+  const runningChatsRef = useRef(new Set());
+
+  const active = tabs.find((t) => t.id === activeId) || tabs[0];
+  const activeIdRef = useRef(null);
+  activeIdRef.current = active?.id;
+
+  const patchTab = useCallback((id, fn) => {
+    setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...fn(t) } : t)));
+  }, []);
+
+  useEffect(() => {
+    if (!activeId && tabs[0]) setActiveId(tabs[0].id);
+  }, [activeId, tabs]);
 
   useEffect(() => {
     window.avb
@@ -43,31 +69,35 @@ export default function AiPanel({ project, context, onClose, showToast }) {
         }
       })
       .catch(() => setProviders([]));
-    inputRef.current?.focus();
   }, []);
 
-  // settings can add/remove models while the chat is open
+  useEffect(() => {
+    if (!hidden) inputRef.current?.focus();
+  }, [hidden, activeId]);
+
   useEffect(() => {
     const on = () => setAdded(getAiModels() || []);
     window.addEventListener('ai-models-changed', on);
     return () => window.removeEventListener('ai-models-changed', on);
   }, []);
 
-  // keep the selected model inside the added list
+  // keep each tab's model inside the added list
   useEffect(() => {
-    if (!providers || added.includes(provider)) return;
-    const first =
-      providers.find((p) => added.includes(p.id) && p.available) ||
-      providers.find((p) => added.includes(p.id));
-    if (first) setProvider(first.id);
-  }, [providers, added, provider]);
+    if (!providers || !added.length) return;
+    setTabs((ts) =>
+      ts.map((t) => {
+        if (added.includes(t.provider)) return t;
+        const first =
+          providers.find((p) => added.includes(p.id) && p.available) ||
+          providers.find((p) => added.includes(p.id));
+        return first ? { ...t, provider: first.id } : t;
+      })
+    );
+  }, [providers, added]);
 
+  // escape closes the panel (only while it's showing)
   useEffect(() => {
-    localStorage.setItem('ai-provider', provider);
-  }, [provider]);
-
-  // escape closes the panel
-  useEffect(() => {
+    if (hidden) return;
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
@@ -76,107 +106,155 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     };
     document.addEventListener('keydown', onKey, true);
     return () => document.removeEventListener('keydown', onKey, true);
-  }, [onClose]);
+  }, [hidden, onClose]);
 
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, live]);
+  }, [active?.messages, active?.live, activeId]);
 
-  const setLiveText = (fn) => {
-    setLive((t) => {
-      const v = fn(t);
-      liveRef.current = v;
-      return v;
-    });
-  };
+  const pushBlocks = useCallback(
+    (id, blocks) => {
+      patchTab(id, (t) => {
+        const last = t.messages[t.messages.length - 1];
+        if (last?.role === 'assistant' && !last.done) {
+          return {
+            messages: [...t.messages.slice(0, -1), { ...last, blocks: [...last.blocks, ...blocks] }],
+          };
+        }
+        return { messages: [...t.messages, { role: 'assistant', blocks, done: false }] };
+      });
+    },
+    [patchTab]
+  );
 
-  const pushBlocks = (blocks) => {
-    setMessages((ms) => {
-      const last = ms[ms.length - 1];
-      if (last?.role === 'assistant' && !last.done) {
-        return [...ms.slice(0, -1), { ...last, blocks: [...last.blocks, ...blocks] }];
-      }
-      return [...ms, { role: 'assistant', blocks, done: false }];
-    });
-  };
-
-  const finish = (error) => {
-    const leftover = liveRef.current.trim();
-    if (leftover) pushBlocks([{ type: 'text', text: leftover }]);
-    setLiveText(() => '');
-    setRunning(false);
-    setMessages((ms) => {
-      const out = ms.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m));
-      if (error) out.push({ role: 'error', text: error });
-      return out;
-    });
-  };
+  const finish = useCallback(
+    (id, error) => {
+      patchTab(id, (t) => {
+        let messages = t.messages;
+        const leftover = t.live.trim();
+        if (leftover) {
+          const last = messages[messages.length - 1];
+          messages =
+            last?.role === 'assistant' && !last.done
+              ? [...messages.slice(0, -1), { ...last, blocks: [...last.blocks, { type: 'text', text: leftover }] }]
+              : [...messages, { role: 'assistant', blocks: [{ type: 'text', text: leftover }], done: false }];
+        }
+        messages = messages.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m));
+        if (error && !t.stopping) messages = [...messages, { role: 'error', text: error }];
+        const seen = activeIdRef.current === id && !hiddenRef.current;
+        return { messages, live: '', running: false, stopping: false, unread: t.running && !seen };
+      });
+    },
+    [patchTab]
+  );
 
   useEffect(() => {
     const off = window.avb.onAiEvent((e) => {
+      const id = e.chatId;
+      if (!id) return;
       if (e.kind === 'init' && e.sessionId) {
-        sessionsRef.current[providerRef.current] = e.sessionId;
+        patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.provider]: e.sessionId } }));
       } else if (e.kind === 'delta') {
-        setLiveText((t) => t + e.text);
+        patchTab(id, (t) => ({ live: t.live + e.text }));
       } else if (e.kind === 'text') {
-        setLiveText(() => '');
-        if (e.text?.trim()) pushBlocks([{ type: 'text', text: e.text }]);
+        patchTab(id, () => ({ live: '' }));
+        if (e.text?.trim()) pushBlocks(id, [{ type: 'text', text: e.text }]);
       } else if (e.kind === 'tool') {
-        pushBlocks([{ type: 'tool', verb: e.verb, detail: e.detail }]);
+        pushBlocks(id, [{ type: 'tool', verb: e.verb, detail: e.detail }]);
       } else if (e.kind === 'result') {
-        if (e.sessionId) sessionsRef.current[providerRef.current] = e.sessionId;
-        finish(e.error || null);
+        if (e.sessionId) patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.provider]: e.sessionId } }));
+        finish(id, e.error || null);
+        if (runningChatsRef.current.delete(id)) onFinishedRef.current?.();
       } else if (e.kind === 'closed') {
-        finish(e.error || null);
+        finish(id, e.error || null);
+        if (runningChatsRef.current.delete(id)) onFinishedRef.current?.();
       }
     });
     return off;
-  }, []);
+  }, [patchTab, pushBlocks, finish]);
 
   const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || running || !project) return;
+    const tab = tabs.find((t) => t.id === activeIdRef.current);
+    if (!tab) return;
+    const text = tab.input.trim();
+    if (!text || tab.running || !project) return;
     const ctx = contextRef.current;
     const prompt = ctx?.block ? `<stacki-context>\n${ctx.block}\n</stacki-context>\n\n${text}` : text;
-    setInput('');
-    setMessages((ms) => [
-      ...ms.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m)),
-      { role: 'user', text },
-    ]);
-    setRunning(true);
+    patchTab(tab.id, (t) => ({
+      input: '',
+      title: t.title || text.slice(0, 24),
+      running: true,
+      unread: false,
+      messages: [
+        ...t.messages.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m)),
+        { role: 'user', text },
+      ],
+    }));
+    runningChatsRef.current.add(tab.id);
     try {
       await window.avb.aiSend({
         projectPath: project.path,
         prompt,
-        sessionId: sessionsRef.current[provider] || null,
+        sessionId: tab.sessions[tab.provider] || null,
         systemPrompt: SYSTEM_PROMPT,
-        provider,
+        provider: tab.provider,
+        chatId: tab.id,
       });
     } catch (err) {
-      setRunning(false);
+      runningChatsRef.current.delete(tab.id);
       const msg = (err?.message || String(err)).replace(
         /^Error invoking remote method '[^']+':\s*(Error:\s*)?/,
         ''
       );
-      setMessages((ms) => [...ms, { role: 'error', text: msg }]);
+      patchTab(tab.id, (t) => ({
+        running: false,
+        messages: [...t.messages, { role: 'error', text: msg }],
+      }));
     }
-  }, [input, running, project, provider]);
+  }, [tabs, project, patchTab]);
 
-  const stop = useCallback(() => {
-    window.avb.aiStop();
-    finish(null);
+  const stop = useCallback(
+    (id) => {
+      patchTab(id, () => ({ stopping: true }));
+      window.avb.aiStop({ chatId: id });
+    },
+    [patchTab]
+  );
+
+  const addTab = useCallback(() => {
+    setTabs((ts) => {
+      if (ts.length >= MAX_TABS) return ts;
+      const t = makeTab(ts[ts.length - 1]?.provider || defaultProvider());
+      setActiveId(t.id);
+      return [...ts, t];
+    });
   }, []);
 
-  const newChat = useCallback(() => {
-    if (running) window.avb.aiStop();
-    sessionsRef.current = {};
-    setMessages([]);
-    setLiveText(() => '');
-    setRunning(false);
-    setPinned(false);
-    inputRef.current?.focus();
-  }, [running]);
+  const closeTab = useCallback(
+    (id) => {
+      window.avb.aiStop({ chatId: id });
+      setTabs((ts) => {
+        const idx = ts.findIndex((t) => t.id === id);
+        let next = ts.filter((t) => t.id !== id);
+        if (!next.length) next = [makeTab(defaultProvider())];
+        if (activeIdRef.current === id) {
+          const fallback = next[Math.max(0, idx - 1)] || next[0];
+          setActiveId(fallback.id);
+        }
+        return next;
+      });
+    },
+    []
+  );
+
+  const selectTab = useCallback(
+    (id) => {
+      setActiveId(id);
+      patchTab(id, () => ({ unread: false }));
+    },
+    [patchTab]
+  );
 
   // auto-grow the input with its content
   useEffect(() => {
@@ -187,7 +265,7 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     const sh = el.scrollHeight;
     el.style.height = prev;
     setAutoH(Math.min(Math.max(sh + 2, 52), 122));
-  }, [input]);
+  }, [active?.input, activeId]);
 
   const effInputH = inputH ?? autoH;
 
@@ -212,7 +290,6 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     grip.addEventListener('pointercancel', up);
   };
 
-  // drag the grip to set the input height by hand; double-click resets
   const onInputGrip = (e) => {
     const startY = e.clientY;
     const startH = effInputH;
@@ -221,7 +298,6 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     });
   };
 
-  // drag to resize the whole panel, up to the full page
   const onDragStart = (e) => {
     const drawer = e.currentTarget.parentElement;
     const maxH = (drawer?.parentElement?.clientHeight || window.innerHeight) - 28;
@@ -233,24 +309,61 @@ export default function AiPanel({ project, context, onClose, showToast }) {
     });
   };
 
+  if (!active) return null;
+
   const addedProviders = providers?.filter((p) => added.includes(p.id)) || [];
-  const current = addedProviders.find((p) => p.id === provider);
+  const current = addedProviders.find((p) => p.id === active.provider);
   const noneAdded = providers && addedProviders.length === 0;
   const unavailable = providers && (!current || !current.available);
-  const compact = !pinned && messages.length === 0 && !live && !running;
+  const compact =
+    !pinned && tabs.length === 1 && active.messages.length === 0 && !active.live && !active.running;
 
   return (
     <div
       className={`ai-drawer ${compact ? 'compact' : ''}`}
-      style={compact ? undefined : { height: Math.max(height, effInputH + 170) }}
+      style={{ ...(compact ? {} : { height: Math.max(height, effInputH + 170) }), ...(hidden ? { display: 'none' } : {}) }}
     >
       <div className="ai-resize" onPointerDown={onDragStart} />
       <div className="ai-head">
         <span className="ai-title">
-          <SparkleIcon size={13} /> AI Mode <span className="ai-sub">- Ask for anything</span>
+          <SparkleIcon size={13} /> {compact ? 'AI Mode' : ''}
+          {compact && <span className="ai-sub">- Ask for anything</span>}
         </span>
+        {!compact && (
+          <div className="ai-tabs">
+            {tabs.map((t) => (
+              <div
+                key={t.id}
+                className={`ai-tab ${t.id === active.id ? 'on' : ''}`}
+                onClick={() => selectTab(t.id)}
+                title={t.title || 'New chat'}
+              >
+                {t.running && <span className="ai-tab-dot running" />}
+                {!t.running && t.unread && <span className="ai-tab-dot done" />}
+                <span className="ai-tab-label">{t.title || 'New chat'}</span>
+                {tabs.length > 1 && (
+                  <button
+                    className="ai-tab-x"
+                    title="Close chat"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      closeTab(t.id);
+                    }}
+                  >
+                    <CloseIcon size={9} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
         <span className="spacer" />
-        <button className="ghost" title="New chat" onClick={newChat}>
+        <button
+          className="ghost"
+          title={tabs.length >= MAX_TABS ? `Up to ${MAX_TABS} chats` : 'New chat'}
+          disabled={tabs.length >= MAX_TABS}
+          onClick={addTab}
+        >
           <PlusIcon size={13} />
         </button>
         <button className="ghost" title="Close (Esc)" onClick={onClose}>
@@ -266,34 +379,34 @@ export default function AiPanel({ project, context, onClose, showToast }) {
       )}
 
       {!compact && (
-      <div className="ai-scroll" ref={scrollRef}>
-        {messages.map((m, i) =>
-          m.role === 'user' ? (
-            <div key={i} className="ai-msg user">{m.text}</div>
-          ) : m.role === 'error' ? (
-            <div key={i} className="ai-msg error">{m.text}</div>
-          ) : (
-            <div key={i} className="ai-msg assistant">
-              {m.blocks.map((b, j) =>
-                b.type === 'tool' ? (
-                  <div key={j} className="ai-tool">
-                    <span className="ai-tool-verb">{b.verb}</span>
-                    {b.detail && <span className="ai-tool-detail">{b.detail}</span>}
-                  </div>
-                ) : (
-                  <div key={j} className="ai-text">{b.text}</div>
-                )
-              )}
+        <div className="ai-scroll" ref={scrollRef}>
+          {active.messages.map((m, i) =>
+            m.role === 'user' ? (
+              <div key={i} className="ai-msg user">{m.text}</div>
+            ) : m.role === 'error' ? (
+              <div key={i} className="ai-msg error">{m.text}</div>
+            ) : (
+              <div key={i} className="ai-msg assistant">
+                {m.blocks.map((b, j) =>
+                  b.type === 'tool' ? (
+                    <div key={j} className="ai-tool">
+                      <span className="ai-tool-verb">{b.verb}</span>
+                      {b.detail && <span className="ai-tool-detail">{b.detail}</span>}
+                    </div>
+                  ) : (
+                    <div key={j} className="ai-text">{b.text}</div>
+                  )
+                )}
+              </div>
+            )
+          )}
+          {active.live && (
+            <div className="ai-msg assistant">
+              <div className="ai-text">{active.live}</div>
             </div>
-          )
-        )}
-        {live && (
-          <div className="ai-msg assistant">
-            <div className="ai-text">{live}</div>
-          </div>
-        )}
-        {running && !live && <div className="ai-thinking">Thinking…</div>}
-      </div>
+          )}
+          {active.running && !active.live && <div className="ai-thinking">Thinking…</div>}
+        </div>
       )}
 
       <div className="ai-composer" onClick={() => inputRef.current?.focus()}>
@@ -307,10 +420,10 @@ export default function AiPanel({ project, context, onClose, showToast }) {
           ref={inputRef}
           className="ai-input"
           style={{ height: effInputH }}
-          placeholder={running ? 'Working…' : 'Describe a change…'}
-          value={input}
+          placeholder={active.running ? 'Working…' : 'Describe a change…'}
+          value={active.input}
           rows={1}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={(e) => patchTab(active.id, () => ({ input: e.target.value }))}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -333,10 +446,13 @@ export default function AiPanel({ project, context, onClose, showToast }) {
           {addedProviders.length > 1 && (
             <select
               className="ai-model"
-              value={provider}
-              disabled={running}
+              value={active.provider}
+              disabled={active.running}
               onClick={(e) => e.stopPropagation()}
-              onChange={(e) => setProvider(e.target.value)}
+              onChange={(e) => {
+                localStorage.setItem('ai-provider', e.target.value);
+                patchTab(active.id, () => ({ provider: e.target.value }));
+              }}
               title="Model"
             >
               {addedProviders.map((p) => (
@@ -346,15 +462,22 @@ export default function AiPanel({ project, context, onClose, showToast }) {
               ))}
             </select>
           )}
-          {running ? (
-            <button className="ai-send stop" title="Stop" onClick={(e) => { e.stopPropagation(); stop(); }}>
+          {active.running ? (
+            <button
+              className="ai-send stop"
+              title="Stop"
+              onClick={(e) => {
+                e.stopPropagation();
+                stop(active.id);
+              }}
+            >
               <StopSquareIcon size={13} />
             </button>
           ) : (
             <button
               className="ai-send"
               title="Send (Enter)"
-              disabled={!input.trim() || unavailable}
+              disabled={!active.input.trim() || unavailable}
               onClick={(e) => {
                 e.stopPropagation();
                 send();

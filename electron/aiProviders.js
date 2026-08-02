@@ -144,7 +144,7 @@ const PROVIDERS = {
 };
 
 function registerAiProviders({ ipcMain, send, ensureToolPath }) {
-  let child = null;
+  const children = new Map(); // chatId -> proc
 
   function resolveBin(p) {
     ensureToolPath();
@@ -187,28 +187,28 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
       bin: resolveBin(p),
     }));
     providers.forEach((p) => (p.available = !!p.bin));
-    return { providers, running: !!child };
+    return { providers, running: children.size > 0 };
   });
 
-  ipcMain.handle('ai:send', async (_e, { projectPath, prompt, sessionId, systemPrompt, provider = 'claude' }) => {
+  ipcMain.handle('ai:send', async (_e, { projectPath, prompt, sessionId, systemPrompt, provider = 'claude', chatId = 'default' }) => {
     const p = PROVIDERS[provider];
     if (!p) throw new Error(`Unknown provider: ${provider}`);
     const bin = resolveBin(p);
     if (!bin) throw new Error(`${p.name} is not installed. ${p.loginHint}`);
-    if (child) throw new Error('The AI is already working — stop it first.');
+    if (children.has(chatId)) throw new Error('This chat is already working. Stop it first.');
 
     const opts = { prompt, sessionId: p.supportsResume ? sessionId : null, systemPrompt };
-    child = spawn(bin, p.args(opts), {
+    const proc = spawn(bin, p.args(opts), {
       cwd: projectPath,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
     });
-    const proc = child;
+    children.set(chatId, proc);
 
     if (p.stdinText) proc.stdin.write(p.stdinText(opts));
     proc.stdin.end();
 
-    const emit = (ev) => send('ai:event', ev);
+    const emit = (ev) => send('ai:event', { chatId, ...ev });
 
     let buf = '';
     proc.stdout.on('data', (chunk) => {
@@ -227,14 +227,16 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     });
 
     proc.on('error', (err) => {
-      if (child === proc) child = null;
-      emit({ kind: 'closed', code: -1, error: err.message });
+      if (children.get(chatId) === proc) children.delete(chatId);
+      emit({ kind: 'closed', code: -1, error: proc.avbStopped ? null : err.message });
     });
 
     proc.on('close', (code) => {
-      if (child === proc) child = null;
+      if (children.get(chatId) === proc) children.delete(chatId);
       if (buf.trim()) p.onLine(buf, emit);
-      emit({ kind: 'closed', code, error: code ? cleanErr(errText) || `exit ${code}` : null });
+      // a deliberate stop is not an error, whatever the exit code says
+      const error = proc.avbStopped ? null : code ? cleanErr(errText) || `exit ${code}` : null;
+      emit({ kind: 'closed', code, error });
     });
 
     return { ok: true };
@@ -274,10 +276,8 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     });
   });
 
-  ipcMain.handle('ai:stop', async () => {
-    if (!child) return { ok: true };
-    const proc = child;
-    child = null;
+  const stopProc = (proc) => {
+    proc.avbStopped = true;
     try {
       proc.kill('SIGTERM');
       setTimeout(() => {
@@ -290,6 +290,19 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     } catch {
       /* already gone */
     }
+  };
+
+  ipcMain.handle('ai:stop', async (_e, { chatId } = {}) => {
+    if (chatId) {
+      const proc = children.get(chatId);
+      if (proc) {
+        children.delete(chatId);
+        stopProc(proc);
+      }
+      return { ok: true };
+    }
+    for (const proc of children.values()) stopProc(proc);
+    children.clear();
     return { ok: true };
   });
 }

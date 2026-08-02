@@ -2473,14 +2473,15 @@ export default function App() {
           )}
         </div>
 
-        {aiOpen && (
-          <AiPanel
-            project={project}
-            context={aiContext}
-            onClose={() => setAiOpen(false)}
-            showToast={showToast}
-          />
-        )}
+        {/* Mounted even while hidden so chats keep running in the background. */}
+        <AiPanel
+          project={project}
+          context={aiContext}
+          hidden={!aiOpen}
+          onClose={() => setAiOpen(false)}
+          onFinished={() => setRefreshKey((k) => k + 1)}
+          showToast={showToast}
+        />
 
         {inPreview && previewSrc && (
           <div className="preview-mode">

@@ -3310,3 +3310,42 @@ body > .embed-editor_bg-modal-backdrop > .embed-editor_grid-modal {
 .code-editor-host { flex: 1; min-height: 0; overflow: hidden; user-select: text; }
 .code-editor-host .cm-editor { height: 100%; }
 .code-editor-host > div { height: 100%; }
+
+/* ai chat tabs */
+.ai-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  min-width: 0;
+  overflow: hidden;
+}
+.ai-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 140px;
+  min-width: 0;
+  padding: 4px 8px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.ai-tab:hover { background: var(--bg-hover); }
+.ai-tab.on { background: var(--bg-active); color: var(--text); border-color: var(--border); }
+.ai-tab-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-tab-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.ai-tab-dot.running { background: var(--accent); animation: ai-pulse 1.2s ease-in-out infinite; }
+.ai-tab-dot.done { background: var(--component-green); }
+.ai-tab-x {
+  padding: 2px;
+  background: transparent;
+  border: none;
+  color: var(--text-faint);
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+.ai-tab-x:hover { color: var(--text); background: var(--bg-hover); }
