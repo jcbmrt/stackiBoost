@@ -22,6 +22,7 @@ const makeTab = (provider, num) => ({
   stopping: false,
   unread: false,
   sessions: {},
+  ctx: null,
   provider,
 });
 
@@ -56,6 +57,14 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
   useEffect(() => {
     if (!activeId && tabs[0]) setActiveId(tabs[0].id);
   }, [activeId, tabs]);
+
+  // selection changes belong to the tab you're looking at; other tabs keep
+  // the context they were typed with
+  useEffect(() => {
+    if (hidden || !context || !active) return;
+    patchTab(active.id, () => ({ ctx: context }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [context, activeId, hidden]);
 
   useEffect(() => {
     window.avb
@@ -179,7 +188,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     if (!tab) return;
     const text = tab.input.trim();
     if (!text || tab.running || !project) return;
-    const ctx = contextRef.current;
+    const ctx = tab.ctx || contextRef.current;
     const prompt = ctx?.block ? `<stacki-context>\n${ctx.block}\n</stacki-context>\n\n${text}` : text;
     patchTab(tab.id, (t) => ({
       input: '',
@@ -434,14 +443,14 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
           }}
         />
         <div className="ai-composer-bar">
-          {context?.pageLabel && (
-            <span className="ai-chip" title={context.block}>
-              <FileIcon size={11} /> {context.pageLabel}
+          {(active.ctx || context)?.pageLabel && (
+            <span className="ai-chip" title={(active.ctx || context).block}>
+              <FileIcon size={11} /> {(active.ctx || context).pageLabel}
             </span>
           )}
-          {context?.selLabel && (
-            <span className="ai-chip sel" title={context.summary}>
-              <TagIcon size={11} /> {context.selLabel}
+          {(active.ctx || context)?.selLabel && (
+            <span className="ai-chip sel" title={(active.ctx || context).summary}>
+              <TagIcon size={11} /> {(active.ctx || context).selLabel}
             </span>
           )}
           <span className="spacer" />
