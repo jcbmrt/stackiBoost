@@ -39,7 +39,11 @@ export default function CodeWindow({ title, language, value, onChange, onClose, 
         plugins: [pluginBabel, pluginEstree, pluginPostcss],
       });
       // typed-during-format or window closed: drop the stale result
-      if (!aliveRef.current || valueRef.current !== snapshot) return;
+      if (!aliveRef.current) return;
+      if (valueRef.current !== snapshot) {
+        setFmtState(null);
+        return;
+      }
       onChange(formatted.replace(/\n$/, ''));
       setFmtState(null);
     } catch {

@@ -490,26 +490,35 @@ if (!process.isMainFrame) {
       scrollPathIntoView(d.path);
     }
     if (d?.type === 'avb:css-reload') {
-      for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
+      const swapLink = (link) => {
         try {
-          if (link.dataset.avbSwapping) continue; // a swap is already in flight
+          if (link.dataset.avbSwapping) {
+            // remember that newer css exists; chain another swap when done
+            link.dataset.avbPending = '1';
+            return;
+          }
           const u = new URL(link.href);
-          if (u.origin !== location.origin) continue;
+          if (u.origin !== location.origin) return;
           u.searchParams.set('avb', Date.now().toString(36));
           const clone = link.cloneNode();
           clone.href = u.pathname + u.search;
           link.dataset.avbSwapping = '1';
-          const finish = () => link.remove();
-          clone.onload = finish;
+          clone.onload = () => {
+            const pending = link.dataset.avbPending;
+            link.remove();
+            if (pending) swapLink(clone);
+          };
           clone.onerror = () => {
             delete link.dataset.avbSwapping;
+            delete link.dataset.avbPending;
             clone.remove();
           };
           link.parentNode.insertBefore(clone, link.nextSibling);
         } catch {
           /* leave that link alone */
         }
-      }
+      };
+      for (const link of document.querySelectorAll('link[rel="stylesheet"]')) swapLink(link);
     }
     if (d?.type === 'avb:set-vh' && typeof d.px === 'number') {
       document.documentElement.style.setProperty('--avb-vh', d.px / 100 + 'px');

@@ -144,9 +144,17 @@ function createWindow() {
   });
 
   // scripts in previewed sites must never steal the app window
-  const appUrl = process.env.VITE_DEV_SERVER_URL || 'file://';
+  const devUrl = process.env.VITE_DEV_SERVER_URL || null;
+  const indexUrl = pathToFileURL(path.join(__dirname, '..', 'dist', 'index.html')).href;
   mainWindow.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith('file://') && !url.startsWith(appUrl)) e.preventDefault();
+    let ok = false;
+    try {
+      if (devUrl) ok = new URL(url).origin === new URL(devUrl).origin;
+      if (!ok) ok = url.split('#')[0] === indexUrl;
+    } catch {
+      ok = false;
+    }
+    if (!ok) e.preventDefault();
   });
 }
 
@@ -885,6 +893,10 @@ ipcMain.handle('project:install', async (_e, projectPath) => {
 });
 
 ipcMain.handle('project:scan', async (_e, projectPath) => {
+  {
+    const nr = path.resolve(projectPath);
+    if (openProjectRoot !== nr) styleUndoStack.length = 0;
+  }
   // Also set here, not just in watch:start — the Assets panel can render
   // thumbnails before the watcher starts, and they'd be refused.
   openProjectRoot = path.resolve(projectPath);
@@ -2256,6 +2268,7 @@ const styleUndoStack = [];
 ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   const abs = assertInProject(filePath);
   let changed = true;
+  let undoStep = false;
   try {
     const prev = fs.readFileSync(abs, 'utf8');
     changed = prev !== css;
@@ -2269,15 +2282,17 @@ ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
       } else {
         styleUndoStack.push({ abs, prev, anchor: Date.now() });
         if (styleUndoStack.length > 100) styleUndoStack.shift();
+        undoStep = true;
       }
     }
   } catch {
-    /* new file */
+    undoStep = true;
+    styleUndoStack.push({ abs, prev: null, anchor: Date.now() });
   }
   if (!changed) return { ok: true };
   markSelfWrite(abs); // the watcher must not treat our own write as external
   fs.writeFileSync(abs, css, 'utf8');
-  send('style:written', { filePath: abs });
+  send('style:written', { filePath: abs, undoStep });
   return { ok: true };
 });
 
@@ -2288,7 +2303,11 @@ ipcMain.handle('style:undo', async () => {
   const root = openProjectRoot ? openProjectRoot + path.sep : null;
   if (!root || !top.abs.startsWith(root)) return { ok: false };
   markSelfWrite(top.abs);
-  fs.writeFileSync(top.abs, top.prev, 'utf8');
+  if (top.prev == null) {
+    try { fs.unlinkSync(top.abs); } catch { /* already gone */ }
+  } else {
+    fs.writeFileSync(top.abs, top.prev, 'utf8');
+  }
   send('style:written', { filePath: top.abs, undo: true });
   return { ok: true };
 });
@@ -2585,6 +2604,7 @@ ipcMain.handle('code:list', async (_e, projectPath) => {
   }
   try {
     for (const name of fs.readdirSync(root)) {
+      if (name.startsWith('.')) continue;
       const abs = path.join(root, name);
       if (fs.statSync(abs).isFile() && CODE_EXT.test(name)) files.push(name);
     }
@@ -2598,6 +2618,20 @@ ipcMain.handle('code:read', async (_e, { projectPath, rel }) => {
   return { text: fs.readFileSync(codeAbs(projectPath, rel), 'utf8') };
 });
 
+const codeEmit = { timer: null, files: new Set(), cms: false };
+function scheduleCodeEvents(abs) {
+  if (/\.json$/i.test(abs)) codeEmit.cms = true;
+  else if (/\.(astro|md|html)$/i.test(abs)) codeEmit.files.add(abs);
+  else return;
+  clearTimeout(codeEmit.timer);
+  codeEmit.timer = setTimeout(() => {
+    if (codeEmit.files.size) send('fs:changed', { files: [...codeEmit.files] });
+    if (codeEmit.cms) send('cms:changed', {});
+    codeEmit.files.clear();
+    codeEmit.cms = false;
+  }, 800);
+}
+
 ipcMain.handle('code:write', async (_e, { projectPath, rel, text }) => {
   const parts = String(rel || '').split('/');
   if (parts.some((seg) => seg.startsWith('.')) || !CODE_EXT.test(rel)) {
@@ -2606,8 +2640,9 @@ ipcMain.handle('code:write', async (_e, { projectPath, rel, text }) => {
   const abs = codeAbs(projectPath, rel);
   markSelfWrite(abs);
   fs.writeFileSync(abs, text, 'utf8');
+  scheduleCodeEvents(abs);
   return { ok: true };
 });
 
 // ai panel
-const aiAgents = registerAiProviders({ ipcMain, send, ensureToolPath });
+const aiAgents = registerAiProviders({ ipcMain, send, ensureToolPath, nodeCliCommand });

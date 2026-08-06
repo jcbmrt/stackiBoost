@@ -93,7 +93,7 @@ function TreeLevel({ node, depth, openRel, onOpen, collapsed, toggle, path }) {
   );
 }
 
-export default function CodePanel({ project, initialRel, onSaved, showToast }) {
+export default function CodePanel({ project, initialRel, showToast }) {
   const [files, setFiles] = useState([]);
   const [openRel, setOpenRel] = useState(null);
   const [text, setText] = useState(null);
@@ -102,15 +102,12 @@ export default function CodePanel({ project, initialRel, onSaved, showToast }) {
   const viewRef = useRef(null);
   const saveTimer = useRef(null);
   const pendingRef = useRef(null); // {rel, text} not yet written
-  const lastSavedRef = useRef({}); // rel -> text we last wrote, to spot real changes
-  const openRelRef = useRef(null);
-  openRelRef.current = openRel;
+  const openRelRef = useRef(null); // intended open file, set imperatively
   const textRef = useRef(null);
   textRef.current = text;
   const dirtyRef = useRef(false);
   dirtyRef.current = dirty;
-  const onSavedRef = useRef(onSaved);
-  onSavedRef.current = onSaved;
+  const conflictAtRef = useRef(0);
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -121,9 +118,7 @@ export default function CodePanel({ project, initialRel, onSaved, showToast }) {
     clearTimeout(saveTimer.current);
     try {
       await window.avb.codeWrite({ projectPath: project.path, rel: pending.rel, text: pending.text });
-      lastSavedRef.current[pending.rel] = pending.text;
       if (openRelRef.current === pending.rel) setDirty(false);
-      onSavedRef.current?.(pending.rel);
     } catch (err) {
       showToast(`Save failed: ${cleanError(err)}`, 'error');
     }
@@ -149,7 +144,6 @@ export default function CodePanel({ project, initialRel, onSaved, showToast }) {
   useEffect(() => {
     // fresh project: nothing pending, nothing open
     pendingRef.current = null;
-    lastSavedRef.current = {};
     setOpenRel(null);
     openRelRef.current = null;
     setText(null);
@@ -192,14 +186,21 @@ export default function CodePanel({ project, initialRel, onSaved, showToast }) {
       try {
         const { text: t } = await window.avb.codeRead({ projectPath: project.path, rel });
         if (t === textRef.current) return; // nothing actually different
-        if (dirtyRef.current) return; // mid-typing: the user's buffer wins
+        if (dirtyRef.current) {
+          // mid-typing: the user's buffer wins, but say so
+          if (Date.now() - (conflictAtRef.current || 0) > 4000) {
+            conflictAtRef.current = Date.now();
+            showToast('This file also changed on disk; keeping your version.', 'error');
+          }
+          return;
+        }
         setText(t);
-        lastSavedRef.current[rel] = t;
       } catch {
         /* deleted, keep buffer */
       }
     });
     return off;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.path]);
 
   // the app menu owns cmd+z; while code mode is up it forwards here

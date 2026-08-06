@@ -278,10 +278,10 @@ export default function CanvasView({ url, refreshKey, scriptsOn, selPath, onSele
                 src={`${url}#avb-design,avb-canvas${scriptsOn ? '' : ',avb-noscript'}`}
                 title={`${f.label} preview`}
                 onLoad={(e) => {
-                  // a fresh document: drop stale hover + rect state for this frame
-                  hoversRef.current[f.key] = null;
+                  // a fresh document: drop stale hover + rect state for this
+                  // frame (never mutate: the ref aliases the state object)
                   rectsJsonRef.current[f.key] = undefined;
-                  setHovers((h) => (h[f.key] ? { ...h, [f.key]: null } : h));
+                  setHovers((h) => (h[f.key] == null ? h : { ...h, [f.key]: null }));
                   setRects((r) => (r[f.key] ? { ...r, [f.key]: {} } : r));
                   e.currentTarget.contentWindow?.postMessage(
                     { type: 'avb:set-vh', px: f.viewportHeight },

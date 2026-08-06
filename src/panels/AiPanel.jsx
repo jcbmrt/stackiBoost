@@ -97,7 +97,8 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     return () => window.removeEventListener('ai-models-changed', on);
   }, []);
 
-  // keep each tab's model inside the added list
+  // keep each tab's model inside the added list (running tabs settle after)
+  const runningKey = tabs.map((t) => (t.running ? '1' : '0')).join('');
   useEffect(() => {
     if (!providers || !added.length) return;
     setTabs((ts) =>
@@ -109,7 +110,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
         return first ? { ...t, provider: first.id } : t;
       })
     );
-  }, [providers, added]);
+  }, [providers, added, runningKey]);
 
   // escape closes the panel (only while it's showing)
   useEffect(() => {
@@ -120,6 +121,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       const editable =
         el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
       if (editable && !el.closest('.ai-drawer')) return;
+      if (document.querySelector('.modal-overlay, .dd-popup, .insert-overlay, .code-window')) return;
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -168,7 +170,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
           messages,
           live: '',
           running: false,
-          stopping: t.running ? false : t.stopping,
+          stopping: false,
           unread: (t.running && !seen) || t.unread,
         };
       });
@@ -212,6 +214,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       input: '',
       running: true,
       unread: false,
+      stopping: false,
       runProvider: t.provider,
       messages: [
         ...t.messages.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m)),
@@ -234,10 +237,11 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
         /^Error invoking remote method '[^']+':\s*(Error:\s*)?/,
         ''
       );
-      patchTab(tab.id, (t) => ({
-        running: false,
-        messages: [...t.messages, { role: 'error', text: msg }],
-      }));
+      patchTab(tab.id, (t) => {
+        const messages = [...t.messages];
+        if (messages[messages.length - 1]?.role === 'user') messages.pop();
+        return { running: false, input: t.input || text, messages: [...messages, { role: 'error', text: msg }] };
+      });
     }
   }, [tabs, project, patchTab]);
 
@@ -404,8 +408,12 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       {noneAdded && (
         <div className="ai-note">No model added yet. Add one in Settings (the gear on the left rail).</div>
       )}
-      {unavailable && !noneAdded && current && (
-        <div className="ai-note">{current.name} isn't installed. {current.loginHint}</div>
+      {unavailable && !noneAdded && (
+        <div className="ai-note">
+          {current
+            ? `${current.name} isn't installed. ${current.loginHint}`
+            : 'This chat\'s model was removed. Add it back or pick another in Settings.'}
+        </div>
       )}
 
       {!compact && (

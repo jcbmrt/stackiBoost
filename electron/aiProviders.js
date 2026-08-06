@@ -143,9 +143,17 @@ const PROVIDERS = {
   },
 };
 
-function registerAiProviders({ ipcMain, send, ensureToolPath }) {
+function registerAiProviders({ ipcMain, send, ensureToolPath, nodeCliCommand }) {
   const children = new Map(); // chatId -> proc
+  const draining = new Set(); // freed at result but not yet exited
   const isWin = process.platform === 'win32';
+
+  // .cmd shims cannot be spawned directly and shell:true would let prompt
+  // text reach cmd.exe; run the shim's js entry under node instead
+  const spawnArgs = (bin, args) => {
+    if (isWin && /\.(cmd|bat)$/i.test(bin) && nodeCliCommand) return nodeCliCommand(bin, args);
+    return [bin, args];
+  };
 
   function resolveBin(p) {
     ensureToolPath();
@@ -199,13 +207,13 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     if (children.has(chatId)) throw new Error('This chat is already working. Stop it first.');
 
     const opts = { prompt, sessionId: p.supportsResume ? sessionId : null, systemPrompt };
-    const proc = spawn(bin, p.args(opts), {
+    const [cmd, argv] = spawnArgs(bin, p.args(opts));
+    const proc = spawn(cmd, argv, {
       cwd: projectPath,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
-      // node refuses to spawn .cmd shims without a shell
-      shell: isWin && /\.(cmd|bat)$/i.test(bin),
     });
+    proc.avbChatId = chatId;
     children.set(chatId, proc);
 
     proc.stdin.on('error', () => {});
@@ -213,8 +221,13 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     proc.stdin.end();
 
     const emit = (ev) => {
-      // free the slot at result so a follow-up send doesn't race process exit
-      if (ev.kind === 'result' && children.get(chatId) === proc) children.delete(chatId);
+      // free the slot at result so a follow-up send doesn't race process exit;
+      // the drainer stays stoppable and its exit stays silent
+      if (ev.kind === 'result' && children.get(chatId) === proc) {
+        proc.avbResultEmitted = true;
+        children.delete(chatId);
+        draining.add(proc);
+      }
       send('ai:event', { chatId, ...ev });
     };
 
@@ -236,11 +249,17 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
 
     proc.on('error', (err) => {
       if (children.get(chatId) === proc) children.delete(chatId);
+      draining.delete(proc);
+      if (proc.avbResultEmitted) return; // the run already finished cleanly
       emit({ kind: 'closed', code: -1, error: proc.avbStopped ? null : err.message });
     });
 
     proc.on('close', (code) => {
       if (children.get(chatId) === proc) children.delete(chatId);
+      draining.delete(proc);
+      // a finished run's exit is bookkeeping, not an event; emitting it would
+      // bleed into whatever run took over this chat id
+      if (proc.avbResultEmitted) return;
       if (buf.trim()) p.onLine(buf, emit);
       // a deliberate stop is not an error, whatever the exit code says
       const error = proc.avbStopped ? null : code ? cleanErr(errText) || `exit ${code}` : null;
@@ -258,10 +277,10 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     return new Promise((resolve) => {
       let out = '';
       let err = '';
-      const proc = spawn(bin, p.testArgs, {
+      const [tCmd, tArgv] = spawnArgs(bin, p.testArgs);
+      const proc = spawn(tCmd, tArgv, {
         cwd: projectPath || os.homedir(),
         env: { ...process.env },
-        shell: isWin && /\.(cmd|bat)$/i.test(bin),
       });
       const timer = setTimeout(() => {
         try {
@@ -288,6 +307,10 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
   const stopProc = (proc) => {
     proc.avbStopped = true;
     try {
+      if (isWin && proc.pid) {
+        spawn('taskkill', ['/pid', String(proc.pid), '/T', '/F'], { shell: true });
+        return;
+      }
       proc.kill('SIGTERM');
       setTimeout(() => {
         try {
@@ -308,9 +331,11 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
         children.delete(chatId);
         stopProc(proc);
       }
+      for (const d of draining) if (d.avbChatId === chatId) stopProc(d);
       return { ok: true };
     }
     for (const proc of children.values()) stopProc(proc);
+    for (const d of draining) stopProc(d);
     children.clear();
     return { ok: true };
   });
@@ -319,7 +344,9 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
   return {
     stopAll() {
       for (const proc of children.values()) stopProc(proc);
+      for (const d of draining) stopProc(d);
       children.clear();
+      draining.clear();
     },
   };
 }

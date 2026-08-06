@@ -536,6 +536,7 @@ export default function App() {
       const name = projectPath.split(/[\\/]/).filter(Boolean).pop();
       setProject({ path: projectPath, name });
       setCodeMode(false);
+      editKindsRef.current = [];
       setLeftTab('navigator');
       // Every project opens on desktop — a breakpoint left over from the
       // last project isn't a choice the user made about this one.
@@ -589,6 +590,7 @@ export default function App() {
       const result = await window.avb.readPage(entry.path);
       setPageState({ ...result, dirty: false });
       historyRef.current = { past: [], future: [], lastPush: 0, lastKey: null };
+      editKindsRef.current = editKindsRef.current.filter((k) => k === 'style');
     },
     [flushSave]
   );
@@ -623,6 +625,7 @@ export default function App() {
       setPageState({ ...fresh, dirty: false });
       setSelectedId(null);
       historyRef.current = { past: [], future: [], lastPush: 0, lastKey: null };
+      editKindsRef.current = editKindsRef.current.filter((k) => k === 'style');
     } else {
       const next = result.pages[0] || null;
       setEditStack(next ? [{ ...next, kind: 'page' }] : []);
@@ -696,6 +699,9 @@ export default function App() {
     if (!coalesce) {
       h.past.push(snapshotOf(state));
       if (h.past.length > 100) h.past.shift();
+      // one marker per snapshot, so cmd+z walks kinds and history in lockstep
+      editKindsRef.current.push('model');
+      if (editKindsRef.current.length > 200) editKindsRef.current.shift();
     }
     h.future = [];
     h.lastKey = coalesceKey;
@@ -738,6 +744,8 @@ export default function App() {
     if (!h.future.length || !state) return;
     const entry = h.future.pop();
     h.past.push(snapshotOf(state));
+    editKindsRef.current.push('model');
+    if (editKindsRef.current.length > 200) editKindsRef.current.shift();
     h.lastKey = null;
     h.lastPush = 0;
     applySnapshot(entry);
@@ -763,8 +771,6 @@ export default function App() {
 
   const mutateModel = useCallback(
     (fn, immediate = false, coalesceKey = null) => {
-      editKindsRef.current.push('model');
-      if (editKindsRef.current.length > 200) editKindsRef.current.shift();
       pushHistory(coalesceKey);
       setPageState((s) => {
         if (!s || !s.editable) return s;
@@ -1256,15 +1262,14 @@ export default function App() {
   // edits show up live, and remember them for cmd+z.
   const cssReloadTimer = useRef(null);
   useEffect(() => {
-    const off = window.avb.onStyleWritten(({ undo: isUndo } = {}) => {
+    const off = window.avb.onStyleWritten(({ undo: isUndo, undoStep } = {}) => {
       if (!isUndo) {
-        const kinds = editKindsRef.current;
-        // a scrub emits many writes; they are one gesture, like the undo stack
-        if (kinds[kinds.length - 1] !== 'style' || Date.now() - (kinds.lastStyleAt || 0) > 1200) {
+        if (undoStep) {
+          // main pushed a new snapshot: mirror it with exactly one marker
+          const kinds = editKindsRef.current;
           kinds.push('style');
           if (kinds.length > 200) kinds.shift();
         }
-        kinds.lastStyleAt = Date.now();
         // a new edit invalidates the model redo future, like any fresh edit
         historyRef.current.future = [];
       }
@@ -1285,16 +1290,23 @@ export default function App() {
     return off;
   }, []);
 
+  const undoBusyRef = useRef(false);
   const undoSmart = useCallback(async () => {
-    const kinds = editKindsRef.current;
-    while (kinds.length && kinds[kinds.length - 1] === 'style') {
-      kinds.pop();
-      const { ok } = await window.avb.styleUndo();
-      if (ok) return;
-      // stack empty or stale project entry: fall through to model history
+    if (undoBusyRef.current) return;
+    undoBusyRef.current = true;
+    try {
+      const kinds = editKindsRef.current;
+      while (kinds.length && kinds[kinds.length - 1] === 'style') {
+        kinds.pop();
+        const { ok } = await window.avb.styleUndo();
+        if (ok) return;
+        // stack empty or stale project entry: fall through to model history
+      }
+      if (kinds[kinds.length - 1] === 'model') kinds.pop();
+      undo();
+    } finally {
+      undoBusyRef.current = false;
     }
-    if (kinds[kinds.length - 1] === 'model') kinds.pop();
-    undo();
   }, [undo]);
 
   // True while the CMS covers the canvas: the page-editing shortcuts below
@@ -2162,9 +2174,9 @@ export default function App() {
     device === 'canvas'
       ? canvasBp
       : device === 'custom' && customWpx
-        ? customWpx <= 478
+        ? customWpx <= 767
           ? 'phone'
-          : customWpx <= 767
+          : customWpx <= 991
             ? 'tablet'
             : 'desktop'
         : device;
@@ -2568,10 +2580,6 @@ export default function App() {
                   ? currentPage.path.slice(project.path.length).replace(/^\//, '')
                   : null
               }
-              onSaved={(rel) => {
-                const page = pageStateRef.current.currentPage;
-                if (page && page.path === `${project.path}/${rel}`) reloadFromDisk();
-              }}
               showToast={showToast}
             />
           )}

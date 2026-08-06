@@ -545,10 +545,10 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
           // An expression that renders a component ({cond && <Nav />}) opens
           // that component's file, so layout chrome stays reachable.
           if (node.kind === 'expr' && onOpenComponent) {
-            const m = /<([A-Z][A-Za-z0-9]*)/.exec(String(node.value || node.head || ''));
+            const m = /(^|[\s({!&|?:,])<([A-Z][A-Za-z0-9]*)/.exec(String(node.value || node.head || ''));
             if (m) {
               e.stopPropagation();
-              onOpenComponent(m[1], null);
+              onOpenComponent(m[2], null);
               return;
             }
           }
