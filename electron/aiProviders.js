@@ -145,6 +145,7 @@ const PROVIDERS = {
 
 function registerAiProviders({ ipcMain, send, ensureToolPath }) {
   const children = new Map(); // chatId -> proc
+  const isWin = process.platform === 'win32';
 
   function resolveBin(p) {
     ensureToolPath();
@@ -202,13 +203,20 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
       cwd: projectPath,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe'],
+      // node refuses to spawn .cmd shims without a shell
+      shell: isWin && /\.(cmd|bat)$/i.test(bin),
     });
     children.set(chatId, proc);
 
+    proc.stdin.on('error', () => {});
     if (p.stdinText) proc.stdin.write(p.stdinText(opts));
     proc.stdin.end();
 
-    const emit = (ev) => send('ai:event', { chatId, ...ev });
+    const emit = (ev) => {
+      // free the slot at result so a follow-up send doesn't race process exit
+      if (ev.kind === 'result' && children.get(chatId) === proc) children.delete(chatId);
+      send('ai:event', { chatId, ...ev });
+    };
 
     let buf = '';
     proc.stdout.on('data', (chunk) => {
@@ -253,6 +261,7 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
       const proc = spawn(bin, p.testArgs, {
         cwd: projectPath || os.homedir(),
         env: { ...process.env },
+        shell: isWin && /\.(cmd|bat)$/i.test(bin),
       });
       const timer = setTimeout(() => {
         try {
@@ -305,6 +314,14 @@ function registerAiProviders({ ipcMain, send, ensureToolPath }) {
     children.clear();
     return { ok: true };
   });
+
+  // so quit can take every agent down with it
+  return {
+    stopAll() {
+      for (const proc of children.values()) stopProc(proc);
+      children.clear();
+    },
+  };
 }
 
 module.exports = { registerAiProviders };

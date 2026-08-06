@@ -374,6 +374,7 @@ export default function App() {
   }, [scriptsOn]);
   // which frame was last clicked in canvas mode, so styles + ai target it
   const [canvasBp, setCanvasBp] = useState('desktop');
+  const [customWpx, setCustomWpx] = useState(null); // preview's typed/dragged width
   // Bumped every time the page itself makes the selection, so the navigator
   // scrolls the row into view — a counter, not the id, so clicking the same
   // element twice still reveals it.
@@ -389,8 +390,8 @@ export default function App() {
   const [assetPick, setAssetPick] = useState(null);
   const tabBeforePick = useRef(null);
   const [aiOpen, setAiOpen] = useState(false);
-  // was the last edit a model change or a style-panel css write? cmd+z follows it
-  const lastEditKindRef = useRef('model');
+  // interleaved order of edits, so cmd+z walks style and model steps correctly
+  const editKindsRef = useRef([]);
   const [codeMode, setCodeMode] = useState(false);
   const codeModeRef = useRef(false);
   codeModeRef.current = codeMode;
@@ -534,6 +535,7 @@ export default function App() {
     async (projectPath) => {
       const name = projectPath.split(/[\\/]/).filter(Boolean).pop();
       setProject({ path: projectPath, name });
+      setCodeMode(false);
       setLeftTab('navigator');
       // Every project opens on desktop — a breakpoint left over from the
       // last project isn't a choice the user made about this one.
@@ -761,7 +763,8 @@ export default function App() {
 
   const mutateModel = useCallback(
     (fn, immediate = false, coalesceKey = null) => {
-      lastEditKindRef.current = 'model';
+      editKindsRef.current.push('model');
+      if (editKindsRef.current.length > 200) editKindsRef.current.shift();
       pushHistory(coalesceKey);
       setPageState((s) => {
         if (!s || !s.editable) return s;
@@ -923,13 +926,19 @@ export default function App() {
   // swap the node with its previous or next sibling (cmd+[ / cmd+])
   const moveSibling = useCallback(
     (nodeId, delta) => {
+      const state = pageStateRef.current.pageState;
+      if (!state?.editable || nodeId === 'layout') return;
+      const target = findNodeById(state.model.nodes, nodeId);
+      if (!target || target.kind === 'chunk-group') return;
+      const check = findParentList(state.model, nodeId);
+      if (!check) return;
+      const to = check.index + delta;
+      if (to < 0 || to >= check.list.length) return;
       mutateModel((model) => {
         const found = findParentList(model, nodeId);
         if (!found) return model;
-        const to = found.index + delta;
-        if (to < 0 || to >= found.list.length) return model;
         const [node] = found.list.splice(found.index, 1);
-        found.list.splice(to, 0, node);
+        found.list.splice(found.index + delta >= 0 ? to : 0, 0, node);
         return model;
       }, true);
     },
@@ -1245,16 +1254,31 @@ export default function App() {
 
   // Style-panel css writes: hot-swap stylesheets in every preview frame so
   // edits show up live, and remember them for cmd+z.
+  const cssReloadTimer = useRef(null);
   useEffect(() => {
     const off = window.avb.onStyleWritten(({ undo: isUndo } = {}) => {
-      lastEditKindRef.current = 'style';
-      for (const f of document.querySelectorAll('iframe')) {
-        try {
-          f.contentWindow?.postMessage({ type: 'avb:css-reload' }, '*');
-        } catch {
-          /* frame mid-load */
+      if (!isUndo) {
+        const kinds = editKindsRef.current;
+        // a scrub emits many writes; they are one gesture, like the undo stack
+        if (kinds[kinds.length - 1] !== 'style' || Date.now() - (kinds.lastStyleAt || 0) > 1200) {
+          kinds.push('style');
+          if (kinds.length > 200) kinds.shift();
         }
+        kinds.lastStyleAt = Date.now();
+        // a new edit invalidates the model redo future, like any fresh edit
+        historyRef.current.future = [];
       }
+      // coalesce reload bursts so slider scrubs swap stylesheets once
+      clearTimeout(cssReloadTimer.current);
+      cssReloadTimer.current = setTimeout(() => {
+        for (const f of document.querySelectorAll('iframe')) {
+          try {
+            f.contentWindow?.postMessage({ type: 'avb:css-reload' }, '*');
+          } catch {
+            /* frame mid-load */
+          }
+        }
+      }, 120);
       // an undo changed the css behind the style panel's back; make it re-read
       if (isUndo) window.dispatchEvent(new CustomEvent('avb:style-external'));
     });
@@ -1262,11 +1286,14 @@ export default function App() {
   }, []);
 
   const undoSmart = useCallback(async () => {
-    if (lastEditKindRef.current === 'style') {
+    const kinds = editKindsRef.current;
+    while (kinds.length && kinds[kinds.length - 1] === 'style') {
+      kinds.pop();
       const { ok } = await window.avb.styleUndo();
       if (ok) return;
-      lastEditKindRef.current = 'model';
+      // stack empty or stale project entry: fall through to model history
     }
+    if (kinds[kinds.length - 1] === 'model') kinds.pop();
     undo();
   }, [undo]);
 
@@ -1390,11 +1417,23 @@ export default function App() {
     };
     const offs = [
       window.avb.onMenu('undo', () => {
-        if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-undo'));
+        if (codeModeRef.current) {
+          const el = document.activeElement;
+          const editable =
+            el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+          if (editable && !el.closest('.code-mode')) return;
+          return window.dispatchEvent(new CustomEvent('avb:code-undo'));
+        }
         if (pageStateRef.current.pageState && !cmsOpenRef.current) undoSmart();
       }),
       window.avb.onMenu('redo', () => {
-        if (codeModeRef.current) return window.dispatchEvent(new CustomEvent('avb:code-redo'));
+        if (codeModeRef.current) {
+          const el = document.activeElement;
+          const editable =
+            el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+          if (editable && !el.closest('.code-mode')) return;
+          return window.dispatchEvent(new CustomEvent('avb:code-redo'));
+        }
         if (pageStateRef.current.pageState && !cmsOpenRef.current) redo();
       }),
       window.avb.onMenu('copy', () => {
@@ -2080,19 +2119,27 @@ export default function App() {
 
   // File edits stream to disk (debounced) — the dev server picks them up.
   const fileSaveTimer = useRef(null);
+  const pendingAssetRef = useRef(null); // {rel, text}
+  const flushAssetWrite = useCallback(() => {
+    const pending = pendingAssetRef.current;
+    if (!pending) return;
+    pendingAssetRef.current = null;
+    clearTimeout(fileSaveTimer.current);
+    window.avb
+      .writeAssetText({ projectPath: project.path, rel: pending.rel, text: pending.text })
+      .catch((err) => showToast(`Save failed: ${cleanError(err)}`, 'error'));
+  }, [project, showToast]);
   const setAssetFileText = useCallback(
     (text) => {
       setFileText(text);
       if (!codeWin || codeWin.kind !== 'file') return;
       const { rel } = codeWin;
+      if (pendingAssetRef.current && pendingAssetRef.current.rel !== rel) flushAssetWrite();
+      pendingAssetRef.current = { rel, text };
       clearTimeout(fileSaveTimer.current);
-      fileSaveTimer.current = setTimeout(() => {
-        window.avb
-          .writeAssetText({ projectPath: project.path, rel, text })
-          .catch((err) => showToast(`Save failed: ${cleanError(err)}`, 'error'));
-      }, 300);
+      fileSaveTimer.current = setTimeout(flushAssetWrite, 300);
     },
-    [codeWin, project, showToast]
+    [codeWin, project, showToast, flushAssetWrite]
   );
 
   // Close the window if its target disappears (page switch, node deleted).
@@ -2109,8 +2156,18 @@ export default function App() {
     crumbs.push(...chain.map((n) => ({ id: n.id, label: crumbLabel(n) })));
   }
 
-  // the breakpoint being edited: canvas clicks pick their frame's breakpoint
-  const effDevice = device === 'canvas' ? canvasBp : device;
+  // the breakpoint being edited: canvas clicks pick their frame's breakpoint,
+  // and a custom width maps to whichever breakpoint that width falls in
+  const effDevice =
+    device === 'canvas'
+      ? canvasBp
+      : device === 'custom' && customWpx
+        ? customWpx <= 478
+          ? 'phone'
+          : customWpx <= 767
+            ? 'tablet'
+            : 'desktop'
+        : device;
 
   // what the ai panel sends along with each prompt
   let aiContext = null;
@@ -2336,7 +2393,7 @@ export default function App() {
 
       <div className="main">
         <LeftRail
-          active={codeMode ? null : leftTab}
+          active={codeMode ? (leftTab === 'settings' ? 'settings' : null) : leftTab}
           onSelect={(id) => {
             // a designer tab exits code mode and returns to the canvas
             if (id !== 'settings' && codeModeRef.current) {
@@ -2455,6 +2512,8 @@ export default function App() {
             onCanvasBp={setCanvasBp}
             onDeselect={() => setSelectedId(null)}
             scriptsOn={scriptsOn}
+            keysDisabled={codeMode || inPreview}
+            onCustomWidth={setCustomWpx}
             onSelectPath={(p) => {
               // Editing a component: the canvas still shows the whole page, so
               // a click in the dimmed area (or on nothing) means "I'm done in
@@ -2509,6 +2568,10 @@ export default function App() {
                   ? currentPage.path.slice(project.path.length).replace(/^\//, '')
                   : null
               }
+              onSaved={(rel) => {
+                const page = pageStateRef.current.currentPage;
+                if (page && page.path === `${project.path}/${rel}`) reloadFromDisk();
+              }}
               showToast={showToast}
             />
           )}

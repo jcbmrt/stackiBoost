@@ -492,12 +492,19 @@ if (!process.isMainFrame) {
     if (d?.type === 'avb:css-reload') {
       for (const link of document.querySelectorAll('link[rel="stylesheet"]')) {
         try {
+          if (link.dataset.avbSwapping) continue; // a swap is already in flight
           const u = new URL(link.href);
           if (u.origin !== location.origin) continue;
           u.searchParams.set('avb', Date.now().toString(36));
           const clone = link.cloneNode();
           clone.href = u.pathname + u.search;
-          clone.onload = () => link.remove();
+          link.dataset.avbSwapping = '1';
+          const finish = () => link.remove();
+          clone.onload = finish;
+          clone.onerror = () => {
+            delete link.dataset.avbSwapping;
+            clone.remove();
+          };
           link.parentNode.insertBefore(clone, link.nextSibling);
         } catch {
           /* leave that link alone */

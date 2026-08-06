@@ -139,8 +139,14 @@ function createWindow() {
   }
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (/^https?:\/\//.test(url)) shell.openExternal(url);
     return { action: 'deny' };
+  });
+
+  // scripts in previewed sites must never steal the app window
+  const appUrl = process.env.VITE_DEV_SERVER_URL || 'file://';
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://') && !url.startsWith(appUrl)) e.preventDefault();
   });
 }
 
@@ -199,7 +205,10 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => stopDevServer());
+app.on('before-quit', () => {
+  stopDevServer();
+  aiAgents?.stopAll();
+});
 
 // ---------------------------------------------------------------------------
 // Auto update
@@ -1124,7 +1133,9 @@ function markSelfWrite(p) {
 }
 
 ipcMain.handle('watch:start', async (_e, projectPath) => {
-  openProjectRoot = path.resolve(projectPath); // scopes the asset protocol
+  const nextRoot = path.resolve(projectPath);
+  if (openProjectRoot !== nextRoot) styleUndoStack.length = 0;
+  openProjectRoot = nextRoot; // scopes the asset protocol
   if (watcher) {
     watcher.close();
     watcher = null;
@@ -2244,23 +2255,26 @@ const styleUndoStack = [];
 
 ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
   const abs = assertInProject(filePath);
+  let changed = true;
   try {
     const prev = fs.readFileSync(abs, 'utf8');
-    if (prev !== css) {
+    changed = prev !== css;
+    if (changed) {
       const top = styleUndoStack[styleUndoStack.length - 1];
-      // rapid writes to the same file (slider scrubs, quick clicks) collapse
-      // into one undo step keeping the oldest snapshot, so one cmd+z reverts
-      // the whole gesture instead of a single tick
-      if (top && top.abs === abs && Date.now() - top.at < 1200) {
-        top.at = Date.now();
+      // rapid writes to the same file (a slider scrub) collapse into one undo
+      // step; the window is anchored at the first write so distinct edits a
+      // second apart stay separate steps
+      if (top && top.abs === abs && Date.now() - top.anchor < 1200) {
+        /* same gesture, keep the original snapshot */
       } else {
-        styleUndoStack.push({ abs, prev, at: Date.now() });
+        styleUndoStack.push({ abs, prev, anchor: Date.now() });
         if (styleUndoStack.length > 100) styleUndoStack.shift();
       }
     }
   } catch {
     /* new file */
   }
+  if (!changed) return { ok: true };
   markSelfWrite(abs); // the watcher must not treat our own write as external
   fs.writeFileSync(abs, css, 'utf8');
   send('style:written', { filePath: abs });
@@ -2270,6 +2284,9 @@ ipcMain.handle('style:writeFile', async (_e, { filePath, css }) => {
 ipcMain.handle('style:undo', async () => {
   const top = styleUndoStack.pop();
   if (!top) return { ok: false };
+  // never touch files outside the open project (stale stack after a switch)
+  const root = openProjectRoot ? openProjectRoot + path.sep : null;
+  if (!root || !top.abs.startsWith(root)) return { ok: false };
   markSelfWrite(top.abs);
   fs.writeFileSync(top.abs, top.prev, 'utf8');
   send('style:written', { filePath: top.abs, undo: true });
@@ -2582,9 +2599,15 @@ ipcMain.handle('code:read', async (_e, { projectPath, rel }) => {
 });
 
 ipcMain.handle('code:write', async (_e, { projectPath, rel, text }) => {
-  fs.writeFileSync(codeAbs(projectPath, rel), text, 'utf8');
+  const parts = String(rel || '').split('/');
+  if (parts.some((seg) => seg.startsWith('.')) || !CODE_EXT.test(rel)) {
+    throw new Error('Not an editable project file');
+  }
+  const abs = codeAbs(projectPath, rel);
+  markSelfWrite(abs);
+  fs.writeFileSync(abs, text, 'utf8');
   return { ok: true };
 });
 
 // ai panel
-registerAiProviders({ ipcMain, send, ensureToolPath });
+const aiAgents = registerAiProviders({ ipcMain, send, ensureToolPath });

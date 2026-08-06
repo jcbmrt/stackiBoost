@@ -73,6 +73,7 @@ export const appHighlight = syntaxHighlighting(
 export default function CodeEditor({ value, language, onChange, onView }) {
   const hostRef = useRef(null);
   const viewRef = useRef(null);
+  const applyingRef = useRef(false); // true while we apply an external value
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
@@ -95,7 +96,7 @@ export default function CodeEditor({ value, language, onChange, onView }) {
           appTheme,
           appHighlight,
           EditorView.updateListener.of((u) => {
-            if (u.docChanged) onChangeRef.current?.(u.state.doc.toString());
+            if (u.docChanged && !applyingRef.current) onChangeRef.current?.(u.state.doc.toString());
           }),
         ],
       }),
@@ -115,7 +116,12 @@ export default function CodeEditor({ value, language, onChange, onView }) {
     if (!view) return;
     const cur = view.state.doc.toString();
     if ((value ?? '') !== cur) {
-      view.dispatch({ changes: { from: 0, to: cur.length, insert: value ?? '' } });
+      applyingRef.current = true;
+      try {
+        view.dispatch({ changes: { from: 0, to: cur.length, insert: value ?? '' } });
+      } finally {
+        applyingRef.current = false;
+      }
     }
   }, [value]);
 

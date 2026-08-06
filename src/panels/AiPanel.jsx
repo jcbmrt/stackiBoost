@@ -58,13 +58,16 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     if (!activeId && tabs[0]) setActiveId(tabs[0].id);
   }, [activeId, tabs]);
 
-  // selection changes belong to the tab you're looking at; other tabs keep
-  // the context they were typed with
+  // selection changes stamp the tab you're looking at; switching tabs alone
+  // never overwrites what a tab already remembers
+  const lastCtxKeyRef = useRef(null);
   useEffect(() => {
-    if (hidden || !context || !active) return;
-    patchTab(active.id, () => ({ ctx: context }));
+    if (hidden || !context) return;
+    if (context.block === lastCtxKeyRef.current) return;
+    lastCtxKeyRef.current = context.block;
+    if (activeIdRef.current) patchTab(activeIdRef.current, () => ({ ctx: context }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [context, activeId, hidden]);
+  }, [context, hidden]);
 
   useEffect(() => {
     window.avb
@@ -81,7 +84,11 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
   }, []);
 
   useEffect(() => {
-    if (!hidden) inputRef.current?.focus();
+    if (!hidden) {
+      inputRef.current?.focus();
+      if (activeIdRef.current) patchTab(activeIdRef.current, () => ({ unread: false }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hidden, activeId]);
 
   useEffect(() => {
@@ -95,7 +102,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     if (!providers || !added.length) return;
     setTabs((ts) =>
       ts.map((t) => {
-        if (added.includes(t.provider)) return t;
+        if (t.running || added.includes(t.provider)) return t;
         const first =
           providers.find((p) => added.includes(p.id) && p.available) ||
           providers.find((p) => added.includes(p.id));
@@ -109,6 +116,10 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
     if (hidden) return;
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
+      const el = document.activeElement;
+      const editable =
+        el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+      if (editable && !el.closest('.ai-drawer')) return;
       e.preventDefault();
       e.stopPropagation();
       onClose();
@@ -118,9 +129,10 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
   }, [hidden, onClose]);
 
   useEffect(() => {
+    if (hidden) return;
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [active?.messages, active?.live, activeId]);
+  }, [active?.messages, active?.live, activeId, hidden]);
 
   const pushBlocks = useCallback(
     (id, blocks) => {
@@ -150,9 +162,15 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
               : [...messages, { role: 'assistant', blocks: [{ type: 'text', text: leftover }], done: false }];
         }
         messages = messages.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m));
-        if (error && !t.stopping) messages = [...messages, { role: 'error', text: error }];
+        if (error && t.running && !t.stopping) messages = [...messages, { role: 'error', text: error }];
         const seen = activeIdRef.current === id && !hiddenRef.current;
-        return { messages, live: '', running: false, stopping: false, unread: t.running && !seen };
+        return {
+          messages,
+          live: '',
+          running: false,
+          stopping: t.running ? false : t.stopping,
+          unread: (t.running && !seen) || t.unread,
+        };
       });
     },
     [patchTab]
@@ -163,7 +181,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       const id = e.chatId;
       if (!id) return;
       if (e.kind === 'init' && e.sessionId) {
-        patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.provider]: e.sessionId } }));
+        patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.runProvider || t.provider]: e.sessionId } }));
       } else if (e.kind === 'delta') {
         patchTab(id, (t) => ({ live: t.live + e.text }));
       } else if (e.kind === 'text') {
@@ -172,7 +190,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       } else if (e.kind === 'tool') {
         pushBlocks(id, [{ type: 'tool', verb: e.verb, detail: e.detail }]);
       } else if (e.kind === 'result') {
-        if (e.sessionId) patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.provider]: e.sessionId } }));
+        if (e.sessionId) patchTab(id, (t) => ({ sessions: { ...t.sessions, [t.runProvider || t.provider]: e.sessionId } }));
         finish(id, e.error || null);
         if (runningChatsRef.current.delete(id)) onFinishedRef.current?.();
       } else if (e.kind === 'closed') {
@@ -194,6 +212,7 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
       input: '',
       running: true,
       unread: false,
+      runProvider: t.provider,
       messages: [
         ...t.messages.map((m) => (m.role === 'assistant' ? { ...m, done: true } : m)),
         { role: 'user', text },
@@ -382,10 +401,10 @@ export default function AiPanel({ project, context, hidden, onClose, onFinished,
         </button>
       </div>
 
-      {compact && noneAdded && (
+      {noneAdded && (
         <div className="ai-note">No model added yet. Add one in Settings (the gear on the left rail).</div>
       )}
-      {compact && unavailable && !noneAdded && current && (
+      {unavailable && !noneAdded && current && (
         <div className="ai-note">{current.name} isn't installed. {current.loginHint}</div>
       )}
 

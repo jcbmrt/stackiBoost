@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import CodeEditor from './CodeEditor.jsx';
 import { CloseIcon, CodeIcon } from './Icons.jsx';
 import * as prettier from 'prettier/standalone';
@@ -24,18 +24,26 @@ export default function CodeWindow({ title, language, value, onChange, onClose, 
     };
   });
   const [fmtState, setFmtState] = useState(null); // null | 'busy' | 'error'
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const aliveRef = useRef(true);
+  useEffect(() => () => { aliveRef.current = false; }, []);
 
   const prettify = async () => {
     if (fmtState === 'busy') return;
     setFmtState('busy');
+    const snapshot = value;
     try {
-      const formatted = await prettier.format(value, {
+      const formatted = await prettier.format(snapshot, {
         parser: language === 'css' ? 'css' : 'babel-ts',
         plugins: [pluginBabel, pluginEstree, pluginPostcss],
       });
+      // typed-during-format or window closed: drop the stale result
+      if (!aliveRef.current || valueRef.current !== snapshot) return;
       onChange(formatted.replace(/\n$/, ''));
       setFmtState(null);
     } catch {
+      if (!aliveRef.current) return;
       setFmtState('error');
       setTimeout(() => setFmtState(null), 1800);
     }

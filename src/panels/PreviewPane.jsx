@@ -70,6 +70,8 @@ export default function PreviewPane({
   onCanvasBp,
   onDeselect,
   scriptsOn,
+  keysDisabled,
+  onCustomWidth,
 }) {
   // The breakpoint lives in App so a re-mount of this pane can't silently
   // kick the user out of a view (which would reload every preview iframe).
@@ -217,7 +219,9 @@ export default function PreviewPane({
   const commitWidth = () => {
     const v = parseInt(wDraft, 10);
     if (v) {
-      setCustomW(clamp(v, 280, 3840));
+      const w = clamp(v, 280, 3840);
+      setCustomW(w);
+      onCustomWidth?.(w);
       setDevice('custom');
     }
     setEditingW(false);
@@ -231,6 +235,7 @@ export default function PreviewPane({
   React.useEffect(() => {
     if (device === 'custom') return;
     setCustomW(null);
+    onCustomWidth?.(null);
     if (device === 'desktop' || device === 'canvas') setCustomH(null); // fills, so reset the height too
   }, [device]);
 
@@ -248,8 +253,11 @@ export default function PreviewPane({
 
   // 1 / 2 / 3 switch to the desktop / tablet / phone breakpoints (ignored
   // while typing in a field so prop values can still contain digits).
+  const keysDisabledRef = React.useRef(keysDisabled);
+  keysDisabledRef.current = keysDisabled;
   React.useEffect(() => {
     const onKey = (e) => {
+      if (keysDisabledRef.current) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const t = e.target;
       if (
@@ -276,6 +284,7 @@ export default function PreviewPane({
     const startY = e.clientY;
     const startW = frame.offsetWidth;
     const startH = frame.offsetHeight;
+    const startScale = scaleRef.current;
     setResizing(true);
     document.body.style.cursor = edge === 's' ? 'row-resize' : 'col-resize';
     const onMove = (ev) => {
@@ -283,9 +292,11 @@ export default function PreviewPane({
         const h = Math.round(startH + (ev.clientY - startY));
         setCustomH(clamp(h, 160, Math.max(160, wrap.clientHeight - 32)));
       } else {
-        const dx = (ev.clientX - startX) / scaleRef.current;
+        const dx = (ev.clientX - startX) / startScale;
         const w = Math.round(startW + (edge === 'e' ? 2 : -2) * dx);
-        setCustomW(clamp(w, 280, 3840));
+        const cw = clamp(w, 280, 3840);
+        setCustomW(cw);
+        onCustomWidth?.(cw);
         setDevice('custom');
       }
     };
@@ -468,7 +479,7 @@ export default function PreviewPane({
             </div>
             <div className="rz-handle rz-w" onPointerDown={startResize('w')} />
             <div className="rz-handle rz-e" onPointerDown={startResize('e')} />
-            <div className="rz-handle rz-s" onPointerDown={startResize('s')} />
+            {frameScale >= 1 && <div className="rz-handle rz-s" onPointerDown={startResize('s')} />}
             {resizing && (
               <div className="rz-readout">
                 {Math.round(width ?? wrapWidth ?? 0)} × {customH ?? frameRef.current?.offsetHeight ?? ''}

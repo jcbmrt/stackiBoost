@@ -542,6 +542,16 @@ function TreeNode({ node, parentId, index, depth, ...ctx }) {
             onOpenCode(node.id);
             return;
           }
+          // An expression that renders a component ({cond && <Nav />}) opens
+          // that component's file, so layout chrome stays reachable.
+          if (node.kind === 'expr' && onOpenComponent) {
+            const m = /<([A-Z][A-Za-z0-9]*)/.exec(String(node.value || node.head || ''));
+            if (m) {
+              e.stopPropagation();
+              onOpenComponent(m[1], null);
+              return;
+            }
+          }
           // Drill into a component's own file, the way Webflow opens one.
           if (node.kind !== 'component' || node.dynamicTag || !onOpenComponent) return;
           e.stopPropagation();

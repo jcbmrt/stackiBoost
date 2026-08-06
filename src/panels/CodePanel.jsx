@@ -93,7 +93,7 @@ function TreeLevel({ node, depth, openRel, onOpen, collapsed, toggle, path }) {
   );
 }
 
-export default function CodePanel({ project, initialRel, showToast }) {
+export default function CodePanel({ project, initialRel, onSaved, showToast }) {
   const [files, setFiles] = useState([]);
   const [openRel, setOpenRel] = useState(null);
   const [text, setText] = useState(null);
@@ -102,9 +102,15 @@ export default function CodePanel({ project, initialRel, showToast }) {
   const viewRef = useRef(null);
   const saveTimer = useRef(null);
   const pendingRef = useRef(null); // {rel, text} not yet written
-  const lastWriteRef = useRef({}); // rel -> ts, to ignore our own fs echoes
+  const lastSavedRef = useRef({}); // rel -> text we last wrote, to spot real changes
   const openRelRef = useRef(null);
   openRelRef.current = openRel;
+  const textRef = useRef(null);
+  textRef.current = text;
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  const onSavedRef = useRef(onSaved);
+  onSavedRef.current = onSaved;
 
   const tree = useMemo(() => buildTree(files), [files]);
 
@@ -113,10 +119,11 @@ export default function CodePanel({ project, initialRel, showToast }) {
     if (!pending) return;
     pendingRef.current = null;
     clearTimeout(saveTimer.current);
-    lastWriteRef.current[pending.rel] = Date.now();
     try {
       await window.avb.codeWrite({ projectPath: project.path, rel: pending.rel, text: pending.text });
+      lastSavedRef.current[pending.rel] = pending.text;
       if (openRelRef.current === pending.rel) setDirty(false);
+      onSavedRef.current?.(pending.rel);
     } catch (err) {
       showToast(`Save failed: ${cleanError(err)}`, 'error');
     }
@@ -124,9 +131,11 @@ export default function CodePanel({ project, initialRel, showToast }) {
 
   const openFile = useCallback(
     async (rel) => {
+      openRelRef.current = rel; // a click wins over the pending auto-open
       await flush();
       try {
         const { text: t } = await window.avb.codeRead({ projectPath: project.path, rel });
+        if (openRelRef.current !== rel) return; // a later open superseded this one
         setOpenRel(rel);
         setText(t);
         setDirty(false);
@@ -138,6 +147,13 @@ export default function CodePanel({ project, initialRel, showToast }) {
   );
 
   useEffect(() => {
+    // fresh project: nothing pending, nothing open
+    pendingRef.current = null;
+    lastSavedRef.current = {};
+    setOpenRel(null);
+    openRelRef.current = null;
+    setText(null);
+    setDirty(false);
     window.avb
       .codeList(project.path)
       .then(({ files: f }) => {
@@ -146,7 +162,8 @@ export default function CodePanel({ project, initialRel, showToast }) {
           (initialRel && f.includes(initialRel) && initialRel) ||
           f.find((x) => /^src\/pages\//.test(x)) ||
           f[0];
-        if (first) openFile(first);
+        // the user may already have clicked a file while we listed
+        if (first && !openRelRef.current) openFile(first);
       })
       .catch(() => setFiles([]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,20 +178,23 @@ export default function CodePanel({ project, initialRel, showToast }) {
     saveTimer.current = setTimeout(flush, 350);
   };
 
+
   useEffect(() => () => flush(), [flush]);
 
-  // outside edits (the ai, another editor) refresh the open file and the tree
+  // outside edits (the ai, another editor) refresh the open file; our own
+  // writes are self-marked in main and never come back through the watcher
   useEffect(() => {
     const off = window.avb.onFsChanged(async ({ files: changed }) => {
       const rel = openRelRef.current;
       if (!rel) return;
       const abs = `${project.path}/${rel}`;
-      const hit = (changed || []).some((f) => f === abs || f.endsWith(`/${rel}`));
-      if (!hit || Date.now() - (lastWriteRef.current[rel] || 0) < 1200) return;
+      if (!(changed || []).some((f) => f === abs)) return;
       try {
         const { text: t } = await window.avb.codeRead({ projectPath: project.path, rel });
+        if (t === textRef.current) return; // nothing actually different
+        if (dirtyRef.current) return; // mid-typing: the user's buffer wins
         setText(t);
-        setDirty(false);
+        lastSavedRef.current[rel] = t;
       } catch {
         /* deleted, keep buffer */
       }
